@@ -25,6 +25,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.CLTDIY"
         android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
             android:name="com.example.cltdiy.MainActivity"

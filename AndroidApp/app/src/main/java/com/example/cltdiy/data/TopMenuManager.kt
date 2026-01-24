@@ -50,7 +50,10 @@ class TopMenuManager {
             val components = trimmedLine.split(",")
             if (components.size >= 5) {
                 val icon = components[0].trim()
-                val nameEn = components[1].trim()
+                var nameEn = components[1].trim()
+                if (nameEn.equals("Ford", ignoreCase = true)) {
+                    nameEn = "Charlotte Food"
+                }
                 val nameCn = components[2].trim()
                 val urlCn = components[3].trim()
                 val urlEn = components[4].trim()

@@ -2,8 +2,10 @@ package com.example.cltdiy.ui.screen
 
 import android.graphics.Bitmap
 import android.view.ViewGroup
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.launch
@@ -38,6 +40,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -137,16 +141,36 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
                                 settings.javaScriptEnabled = true
-                                webViewClient = WebViewClient()
+                                webViewClient = object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: WebResourceRequest?
+                                    ): Boolean {
+                                        val url = request?.url?.toString()
+                                        if (url != null) {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                view?.context?.startActivity(intent)
+                                                return true
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                        return false
+                                    }
+                                }
                                 loadUrl(hotToolWebUrl!!)
                             }
                         },
-                        modifier = Modifier.weight(1f)
+                        update = { view ->
+                            // Update logic if needed
+                        }
                     )
+                    }
                 }
             }
         }
-    }
     
     if (showAPIKeySetup) {
         APIKeySetupDialog(
@@ -165,6 +189,13 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             onRegisterClick = { 
                 viewModel.closeLogin()
                 viewModel.openRegister()
+            },
+            onForgotPassword = { email ->
+                if (email.isNotBlank()) {
+                    viewModel.performPasswordReset(email)
+                } else {
+                    viewModel.showError(if (isEnglish) "Please enter email first" else "请先输入邮箱")
+                }
             },
             isEnglish = isEnglish
         )
@@ -307,6 +338,16 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                 leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) }
                             )
                         }
+                        
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Settings" else "设置") },
+                            onClick = { 
+                                showUserProfileMenu = false
+                                viewModel.openSettings() 
+                            },
+                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
+                        )
                     }
                 }
 
@@ -434,13 +475,31 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                     leadingIcon = { Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 )
                             }
+                        } else if (!isLoggedIn) {
+                            Text(
+                                text = if (isEnglish) " More Tools" else " 更多工具",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                            DropdownMenuItem(
+                                text = { 
+                                     Column {
+                                         Text(if (isEnglish) "Register to unlock valuable tools" else "注册账号以解锁更多超值工具", fontSize = 14.sp)
+                                         Text(if (isEnglish) "Exclusive to registered users" else "注册用户专享", fontSize = 10.sp, color = Color.Gray)
+                                     }
+                                },
+                                onClick = { 
+                                    showAIAndToolsMenu = false
+                                    viewModel.openRegister()
+                                },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Gray) }
+                            )
                         }
                     }
                 }
 
-                IconButton(onClick = { viewModel.openSettings() }) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
-                }
+
             }
         }
     ) { padding ->
@@ -464,7 +523,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 } else {
                     listOf(
                         AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS, AITopic.FOOD,
-                        AITopic.DIY, AITopic.LIFE, AITopic.MISC, AITopic.REAL_ESTATE, AITopic.FORD
+                        AITopic.DIY, AITopic.LIFE, AITopic.MISC, AITopic.REAL_ESTATE
                     )
                 }
                 
@@ -528,7 +587,27 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                         ViewGroup.LayoutParams.MATCH_PARENT
                                     )
                                     settings.javaScriptEnabled = true
-                                    webViewClient = WebViewClient()
+                                    settings.domStorageEnabled = true
+                                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                    webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(
+                                            view: WebView?,
+                                            request: WebResourceRequest?
+                                        ): Boolean {
+                                            val url = request?.url?.toString()
+                                            if (url != null) {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    view?.context?.startActivity(intent)
+                                                    return true
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                            }
+                                            return false
+                                        }
+                                    }
                                     loadUrl(currentWebUrl!!)
                                 }
                             },
@@ -801,7 +880,7 @@ fun TopicButton(
             AITopic.LIFE -> Icons.Default.Favorite
             AITopic.FINANCE_NEWS -> Icons.Default.AttachMoney
             AITopic.MISC -> Icons.Default.Dashboard
-            AITopic.FORD -> Icons.Default.DirectionsCar
+
         }
     }
     
@@ -1239,6 +1318,7 @@ fun LoginDialog(
     onDismiss: () -> Unit,
     onLogin: (String, String) -> Unit,
     onRegisterClick: () -> Unit,
+    onForgotPassword: (String) -> Unit,
     isEnglish: Boolean
 ) {
     var email by remember { mutableStateOf("") }
@@ -1269,6 +1349,11 @@ fun LoginDialog(
                     onRegisterClick()
                 }) {
                     Text(if (isEnglish) "No account? Register" else "没有账号？注册")
+                }
+                TextButton(onClick = {
+                    onForgotPassword(email)
+                }) {
+                   Text(if (isEnglish) "Forgot Password?" else "忘记密码？", color = Color.Gray)
                 }
             }
         },

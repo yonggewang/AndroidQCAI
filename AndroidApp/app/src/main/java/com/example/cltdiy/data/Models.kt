@@ -18,8 +18,7 @@ enum class AITopic(val chineseName: String, val englishName: String, val id: Str
     DIY("房屋维护", "DIY Help", "diy"),
     REAL_ESTATE("房产助手", "Real Estate Assistant", "realEstate"),
     LIFE("本地生活", "Local Life", "life"),
-    MISC("杂项", "Misc", "misc"),
-    FORD("福特信息", "Ford", "ford") // Kept as extra from original
+    MISC("杂项", "Misc", "misc")
 }
 
 

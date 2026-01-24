@@ -97,6 +97,15 @@ class UserManager {
         }
     }
     
+    suspend fun resetPassword(email: String): Result<String> {
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            Result.success("Password reset email sent")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
     fun logout() {
         auth.signOut()
     }

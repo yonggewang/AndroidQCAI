@@ -28,10 +28,10 @@ enum class DisplayMode {
 }
 
 class TeacherViewModel(application: Application) : AndroidViewModel(application) {
-    private val aiService = AIService()
-    private val ttsManager = TTSManager(application)
-    private val speechManager = SpeechManager(application)
-    private val userManager = UserManager()
+    private val aiService by lazy { AIService() }
+    private var ttsManager: TTSManager? = null
+    private var speechManager: SpeechManager? = null
+    private var userManager: UserManager? = null
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
@@ -112,8 +112,10 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _speechPitch = MutableStateFlow(1.0f)
     val speechPitch = _speechPitch.asStateFlow()
 
-    val isRecording = speechManager.isRecording
-    val transcript = speechManager.transcript
+    val isRecording: StateFlow<Boolean> 
+        get() = speechManager?.isRecording ?: MutableStateFlow(false).asStateFlow()
+    val transcript: StateFlow<String> 
+        get() = speechManager?.transcript ?: MutableStateFlow("").asStateFlow()
 
     init {
         PreferenceManager.init(application)
@@ -128,7 +130,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         // Load speech settings
         _speechRate.value = PreferenceManager.speechRate
         _speechPitch.value = PreferenceManager.speechPitch
-        ttsManager.updateConfig(_speechRate.value, _speechPitch.value)
+        ttsManager?.updateConfig(_speechRate.value, _speechPitch.value)
         
         // Initial URL setup
         updateDisplayMode(AITopic.WORLD_NEWS)
@@ -138,8 +140,22 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         
         
+        try {
+           ttsManager = TTSManager(application)
+        } catch (e: Exception) { e.printStackTrace() }
+
+        try {
+           speechManager = SpeechManager(application)
+        } catch (e: Exception) { e.printStackTrace() }
+
+        try {
+            userManager = UserManager()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
         viewModelScope.launch {
-            userManager.authState.collect { profile ->
+            userManager?.authState?.collect { profile ->
                 _userProfile.value = profile
                 _isLoggedIn.value = profile != null
                 
@@ -154,11 +170,13 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         viewModelScope.launch {
             transcript.collect { text ->
-                if (text.isNotEmpty() && !isRecording.value) {
+                if (text.isNotEmpty() && isRecording.value == false) {
                      // Check if we just finished recording? 
                 }
             }
         }
+        
+
     }
 
     fun setLanguage(language: AppLanguage) {
@@ -176,7 +194,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun setTopic(topic: AITopic) {
         _selectedTopic.value = topic
-        ttsManager.stop()
+        ttsManager?.stop()
         updateDisplayMode(topic)
     }
     
@@ -188,13 +206,13 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     fun setSpeechRate(rate: Float) {
         _speechRate.value = rate
         PreferenceManager.speechRate = rate
-        ttsManager.updateConfig(rate, _speechPitch.value)
+        ttsManager?.updateConfig(rate, _speechPitch.value)
     }
 
     fun setSpeechPitch(pitch: Float) {
         _speechPitch.value = pitch
         PreferenceManager.speechPitch = pitch
-        ttsManager.updateConfig(_speechRate.value, pitch)
+        ttsManager?.updateConfig(_speechRate.value, pitch)
     }
 
     fun openSettings() {
@@ -218,8 +236,13 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun performLogin(email: String, pass: String) {
+        val manager = userManager
+        if (manager == null) {
+            showError("Firebase not initialized")
+            return
+        }
         viewModelScope.launch {
-             val result = userManager.login(email, pass)
+             val result = manager.login(email, pass)
              if (result.isSuccess) {
                  _showLoginDialog.value = false
              } else {
@@ -227,10 +250,30 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
              }
         }
     }
+    fun performPasswordReset(email: String) {
+        val manager = userManager
+        if (manager == null) {
+            showError("Firebase not initialized")
+            return
+        }
+        viewModelScope.launch {
+            val result = manager.resetPassword(email)
+            if (result.isSuccess) {
+                showError("Reset link sent to $email")
+            } else {
+                showError(result.exceptionOrNull()?.message ?: "Reset Failed")
+            }
+        }
+    }
     
     fun performRegister(email: String, pass: String, fullName: String, username: String, phone: String) {
+        val manager = userManager
+        if (manager == null) {
+            showError("Firebase not initialized")
+            return
+        }
         viewModelScope.launch {
-            val result = userManager.register(email, pass, fullName, username, phone)
+            val result = manager.register(email, pass, fullName, username, phone)
             if (result.isSuccess) {
                 _showRegisterDialog.value = false
                 showError("Success. Please check email to verify.")
@@ -241,19 +284,21 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun logout() {
-        userManager.logout()
+        userManager?.logout()
     }
 
-    private val topMenuManager = com.example.cltdiy.data.TopMenuManager()
+    private val topMenuManager by lazy { com.example.cltdiy.data.TopMenuManager() }
 
     private fun fetchTopMenu() {
         viewModelScope.launch(Dispatchers.IO) {
-             val items = topMenuManager.fetchTopMenu()
-             if (items.isNotEmpty()) {
-                 _topMenuItems.value = items
-                 // Refresh current topic display
-                 updateDisplayMode(_selectedTopic.value)
-             }
+            try {
+                 val items = topMenuManager.fetchTopMenu()
+                 if (items.isNotEmpty()) {
+                     _topMenuItems.value = items
+                     // Refresh current topic display
+                     updateDisplayMode(_selectedTopic.value)
+                 }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -301,10 +346,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     _displayMode.value = DisplayMode.WEB
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
                 }
-                AITopic.FORD -> {
-                    _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://quantumpropertyllc.github.io/news/topnews.html" // Default if not in menu
-                }
+
                 else -> {
                     _displayMode.value = DisplayMode.WEB
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/news/topnews.html"
@@ -325,15 +367,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun toggleRecording() {
-        ttsManager.stop()
+        ttsManager?.stop()
         if (isRecording.value) {
             stopRecordingAndSend()
         } else {
              // Check keys BEFORE starting recording
              if (!checkKeys()) return
-
+ 
              _displayMode.value = DisplayMode.CHAT
-             speechManager.startRecording { error ->
+             speechManager?.startRecording { error ->
                  handleError(error)
              }
         }
@@ -341,7 +383,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun stopRecordingAndSend() {
         if (isRecording.value) {
-            speechManager.stopRecording()
+            speechManager?.stopRecording()
             // Send what we have
             val text = transcript.value
             if (text.isNotEmpty()) {
@@ -369,7 +411,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 )
                 val aiMsg = ChatMessage(text = response, isUser = false)
                 _messages.value = _messages.value + aiMsg
-                ttsManager.speak(response)
+                ttsManager?.speak(response)
             } catch (e: Exception) {
                 handleError(e.message)
             } finally {
@@ -380,7 +422,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun helpWithDIY(image: Bitmap?) {
         if (image == null) return
-        ttsManager.stop()
+        ttsManager?.stop()
         setTopic(AITopic.DIY)
         val msg = if (_appLanguage.value == AppLanguage.CHINESE) "请解析这张图片中的问题" else "Please analyze the problem in this image"
         sendMessage(msg, image)
@@ -406,7 +448,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun resetConversation() {
         _messages.value = emptyList()
-        ttsManager.stop()
+        ttsManager?.stop()
         _displayMode.value = DisplayMode.CHAT
         
         val welcomeText = if (_appLanguage.value == AppLanguage.CHINESE) {
@@ -414,7 +456,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         } else {
             "I am CyberPanda. I primarily use ChatGPT and Gemini as the AI engine, combined with the local environment of Charlotte, to provide local information services for the Charlotte community. I am specifically designed as a DIY smart assistant, focusing on helping users get life service guides, procedure explanations, and sharing and recommending Chinese food and catering information, making life in Charlotte more convenient, efficient, and secure."
         }
-        ttsManager.speak(welcomeText)
+        ttsManager?.speak(welcomeText)
     }
 
     fun dismissError() {
@@ -445,12 +487,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _apiKeySetupReason.value = null
     }
 
-    private val hotListManager = com.example.cltdiy.data.HotListManager()
+    private val hotListManager by lazy { com.example.cltdiy.data.HotListManager() }
 
     private fun fetchHotList() {
         viewModelScope.launch(Dispatchers.IO) {
-            val items = hotListManager.fetchHotList()
-            _hotListItems.value = items
+            try {
+                val items = hotListManager.fetchHotList()
+                _hotListItems.value = items
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -489,7 +533,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
-        speechManager.destroy()
-        ttsManager.shutdown()
+        speechManager?.destroy()
+        ttsManager?.shutdown()
     }
 }

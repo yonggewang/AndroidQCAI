@@ -93,7 +93,6 @@ class AIService {
                 AITopic.LIFE -> "\nCurrent Mode: North Carolina Life Advisor."
                 AITopic.FINANCE_NEWS -> "\nCurrent Mode: Finance News Expert."
                 AITopic.MISC -> "\nCurrent Mode: Miscellaneous Information Assistant."
-                AITopic.FORD -> "\nCurrent Mode: Ford Information Expert."
             }
         } else {
             when (topic) {
@@ -105,7 +104,6 @@ class AIService {
                 AITopic.LIFE -> "\n当前模式：北卡生活点滴。"
                 AITopic.FINANCE_NEWS -> "\n当前模式：财经头条专家。"
                 AITopic.MISC -> "\n当前模式：杂项信息助手。"
-                AITopic.FORD -> "\n当前模式：福特信息专家。"
             }
         }
         
