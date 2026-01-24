@@ -133,9 +133,26 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         ttsManager?.updateConfig(_speechRate.value, _speechPitch.value)
         
         // Initial URL setup
+        // Initial URL setup
         updateDisplayMode(AITopic.WORLD_NEWS)
         fetchHotList()
-        fetchTopMenu()
+        
+        // Robust fetch with retry for startup
+        viewModelScope.launch {
+            fetchTopMenu() // First attempt
+            
+            // Retry check: If network was slow or not ready, try again after a few seconds
+            kotlinx.coroutines.delay(2000)
+            if (_topMenuItems.value.isEmpty()) {
+                fetchTopMenu()
+            }
+            
+            // Final backup retry
+            kotlinx.coroutines.delay(3000)
+            if (_topMenuItems.value.isEmpty()) {
+                fetchTopMenu()
+            }
+        }
         
         
         
@@ -289,8 +306,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val topMenuManager by lazy { com.example.cltdiy.data.TopMenuManager() }
 
-    private fun fetchTopMenu() {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun fetchTopMenu() {
+        viewModelScope.launch {
             try {
                  val items = topMenuManager.fetchTopMenu()
                  if (items.isNotEmpty()) {
@@ -361,9 +378,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
 
     fun showAIRealEstateTools() {
-        if (_selectedTopic.value == AITopic.REAL_ESTATE) {
-            _showAIRealEstateTools.value = true
-        }
+        // Always allow showing tools regardless of current topic
+        _showAIRealEstateTools.value = true
     }
 
     fun toggleRecording() {
@@ -430,15 +446,108 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun analyzeRealEstate(address: String) {
         if (address.isBlank()) return
+        
+        _isLoading.value = true
         _displayMode.value = DisplayMode.CHAT
         _showAIRealEstateTools.value = false // dismiss tools card
         
-        val prompt = if (_appLanguage.value == AppLanguage.CHINESE) 
-            "请分析房产地址 \"$address\" 的价值。请包括以下信息：总面积、卧室和浴室数量、目前的房产税率。请同时提供房产业主、学校信息以及你能找到的其他相关细节。" 
-        else 
-            "Please analyze the property value of \"$address\". In your analysis, please include the following information: the total square footage, the number of bedrooms and bathrooms, and the current property tax rate. Please also include the owner of the property, the school information, and any other relevant details you can find."
-        
-        sendMessage(prompt, null)
+        viewModelScope.launch {
+            // Fetch official GIS data first
+            val gisData = com.example.cltdiy.data.PropertyDataService().fetchPropertyData(address)
+            
+            val prompt = if (_appLanguage.value == AppLanguage.CHINESE) 
+                """
+                请提供关于地址 "\(address)" 的尽可能详细、最新的信息和数据。以下是我已经为你获取的【官方政府 GIS 数据】（附在最后），请务必优先使用这些准确数据（特别是业主姓名、地块信息、学区等）来回答相关问题。 关于房主信息，如果不在GIS数据里，那么有可能的话，你可以自己做研究获得。
+
+                    请按以下顺序整理并输出具体内容（如果 GIS 数据包含列表之外的有用信息，请继续以 12、13 等序号列出）：
+                    1. 最新的房屋估值或市场价值
+                    2. 房屋总面积（平方英尺/平方米）
+                    3. 卧室数量和浴室数量
+                    4. 建筑年份
+                    5. 最近一次成交价格和成交日期
+                    6. 当前的房产税率或估算税额
+                    7. 所属学区及学校评分，周边环境描述，以及安全/治安指数
+                    8. 房产业主的公开信息（请直接引用 GIS 数据中的 Owner）
+                    9. 最近三年内该地址或周边（500米/1英里）范围内的犯罪记录和统计数据
+                    10. 周边居民的人口统计信息（年龄、收入水平、教育水平）
+                    11. 最近几年在这个房屋里居住过的人员名单和联系方式
+
+                    **重要指令：**
+                    - 请将 GIS 数据中的信息有机地整合到你的分析中，不要忽略它们。
+                    - 凡是 GIS 数据中提供但未包含在上述11点中的信息（如 Zoning, Land Use 等），请务必作为第 12、13 点等继续列出。
+                    - 直接提供数据结果，不要说空话。
+                
+                
+                === OFFICIAL GIS DATA START ===
+                $gisData
+                === OFFICIAL GIS DATA END ===
+                """
+            else 
+                """
+                Please provide the most detailed and up-to-date information and data for the address "$address". I have attached the 【Official Government GIS Data】 at the end of this message. You MUST prioritize this accurate data (especially Owner Name, Parcel ID, School Zone, etc.) when answering. If the property owner is not included in the GIS data and if possible, you may do a research by yourself and get these information.
+
+                Please provide the most detailed and up-to-date information and data for the address "\(address)". I have attached the 【Official Government GIS Data】 at the end of this message. You MUST prioritize this accurate data (especially Owner Name, Parcel ID, School Zone, etc.) when answering. If hte property owner is not included in the GIS data and if possible, you may do a researh by yourself and get these information.
+
+                    Please organize and output the specific content in the following order (if GIS data contains useful information beyond this list, please continue listing them as 12, 13, etc.):
+                    1. Latest property valuation or market value
+                    2. Total living area (sq ft / sq m)
+                    3. Number of bedrooms and bathrooms
+                    4. Year built
+                    5. Most recent sale price and date
+                    6. Current property tax rate or estimated tax amount
+                    7. Assigned school district and school ratings, neighborhood description, and safety/security index
+                    8. Publicly available property owner information (Directly cite the 'Owner' from the GIS data)
+                    9. Crime records and statistics within the last 3 years for this address or surrounding area (500m/1 mile)
+                    10. Demographics of surrounding residents (age, income level, education level)
+                    11. List of residents who have lived in this house in recent years
+
+                    **IMPORTANT INSTRUCTIONS:**
+                    - Integrate the GIS data organically into your analysis; do not ignore it.
+                    - Any information provided in the GIS data that is not covered in the above 11 points (like Zoning, Land Use) MUST be listed as items 12, 13, etc.
+                    - Directly provide data results; do not use vague conversational fillers.
+                
+                
+                === OFFICIAL GIS DATA START ===
+                $gisData
+                === OFFICIAL GIS DATA END ===
+                """
+            
+            
+            _isLoading.value = false
+            // Send message but hide it from user view
+            sendMessageInternal(prompt, true, AITopic.REAL_ESTATE, address)
+        }
+    }
+    
+    // Helper to send message without re-triggering checks if we are already in the flow
+    private fun sendMessageInternal(text: String, isHidden: Boolean, topicOverride: AITopic? = null, realEstateAddress: String? = null) {
+         _displayMode.value = DisplayMode.CHAT
+        val newUserMsg = ChatMessage(text = text, isUser = true, isHidden = isHidden)
+        _messages.value = _messages.value + newUserMsg
+        _isLoading.value = true
+
+        viewModelScope.launch {
+            try {
+                // Use override topic if provided, otherwise use selected
+                val effectiveTopic = topicOverride ?: _selectedTopic.value
+                
+                val response = aiService.sendMessage(
+                    text = text,
+                    engine = _selectedEngine.value,
+                    topic = effectiveTopic,
+                    language = _appLanguage.value,
+                    image = null,
+                    realEstateAddress = realEstateAddress
+                )
+                val aiMsg = ChatMessage(text = response, isUser = false)
+                _messages.value = _messages.value + aiMsg
+                ttsManager?.speak(response)
+            } catch (e: Exception) {
+                handleError(e.message)
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     fun startAIChat() {

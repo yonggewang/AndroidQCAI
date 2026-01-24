@@ -17,14 +17,14 @@ import java.util.concurrent.TimeUnit
 class AIService {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(180, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)
         .build()
 
     private val openAIEndpoint = "https://api.openai.com/v1/chat/completions"
     // Matching iOS endpoint
-    private val geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    private val geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
     private val vercelEndpoint = "https://vercel-backendcltai.vercel.app/api/analyze"
 
     suspend fun sendMessage(
@@ -127,7 +127,7 @@ class AIService {
         val body = JSONObject()
         body.put("model", "gpt-4o-mini")
         body.put("messages", messages)
-        body.put("max_tokens", 1000)
+        body.put("max_tokens", 4000)
 
         val request = Request.Builder()
             .url(openAIEndpoint)

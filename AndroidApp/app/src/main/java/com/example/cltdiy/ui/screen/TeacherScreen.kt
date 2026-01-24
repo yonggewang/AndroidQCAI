@@ -175,8 +175,27 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     if (showAPIKeySetup) {
         APIKeySetupDialog(
             onDismiss = { viewModel.dismissAPIKeySetup() },
-            onSave = { viewModel.dismissAPIKeySetup() } // Logic handled in Dialog
+            onSave = { viewModel.dismissAPIKeySetup() }
         )
+    }
+
+    val showAIRealEstateTools by viewModel.showAIRealEstateTools.collectAsState()
+    if (showAIRealEstateTools) {
+        Dialog(onDismissRequest = { viewModel.dismissAddressInput() }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                 RealEstateInputArea(
+                    onDismiss = { viewModel.dismissAddressInput() },
+                    onConfirm = { address -> viewModel.analyzeRealEstate(address) },
+                    onChatWithAI = { viewModel.startAIChat() },
+                    modifier = Modifier.padding(16.dp),
+                    isEnglish = isEnglish
+                )
+            }
+        }
     }
 
     val showLoginDialog by viewModel.showLoginDialog.collectAsState()
@@ -417,26 +436,22 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) }
                         )
                         DropdownMenuItem(
-                            text = { Text(if (selectedTopic == AITopic.REAL_ESTATE) (if (isEnglish) "Real Estate AI" else "房产智能分析") else (if (isRecording) (if (isEnglish) "Stop Sending" else "停止发送") else (if (isEnglish) "AI Chat" else "AI对话"))) },
+                            text = { Text(if (isRecording) (if (isEnglish) "Stop Sending" else "停止发送") else (if (isEnglish) "AI Chat" else "AI对话")) },
                             onClick = {
                                 showAIAndToolsMenu = false
-                                if (selectedTopic == AITopic.REAL_ESTATE) {
-                                    viewModel.showAIRealEstateTools()
+                                if (isRecording) {
+                                    viewModel.toggleRecording() 
                                 } else {
-                                    if (isRecording) {
-                                        viewModel.toggleRecording() 
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                        viewModel.toggleRecording()
                                     } else {
-                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                            viewModel.toggleRecording()
-                                        } else {
-                                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                        }
+                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                     }
                                 }
                             },
                             leadingIcon = { 
                                 Icon(
-                                    imageVector = if (selectedTopic == AITopic.REAL_ESTATE) Icons.Default.Analytics else (if (isRecording) Icons.Default.Stop else Icons.Default.Chat), 
+                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Chat, 
                                     contentDescription = null,
                                     tint = if (isRecording) Color.Red else LocalContentColor.current
                                 ) 
@@ -451,6 +466,25 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                         )
 
+
+
+                        Divider()
+
+                        // Category: Property Tools
+                        Text(
+                            text = if (isEnglish) " Property Tools" else " 房产工具",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Property AI Analysis" else "房产AI分析") },
+                            onClick = {
+                                showAIAndToolsMenu = false
+                                viewModel.showAIRealEstateTools()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) }
+                        )
 
                         Divider()
                         
@@ -514,6 +548,19 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Deleted Engine Switch from here
                 
+                // Add explicit refresh button for Dynamic Menu debugging/verification
+                Button(
+                    onClick = { 
+                        viewModel.fetchTopMenu() 
+                    },
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isEnglish) "Refresh Menu Data" else "刷新菜单数据", fontSize = 12.sp)
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 // Topic Grid
@@ -523,7 +570,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 } else {
                     listOf(
                         AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS, AITopic.FOOD,
-                        AITopic.DIY, AITopic.LIFE, AITopic.MISC, AITopic.REAL_ESTATE
+                        AITopic.DIY, AITopic.REAL_ESTATE, AITopic.LIFE, AITopic.MISC
                     )
                 }
                 
@@ -543,6 +590,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                 topic = topic,
                                 dynamicItem = dynamicItem,
                                 isSelected = selectedTopic == topic,
+                                isEnglish = isEnglish,
                                 onClick = { viewModel.setTopic(topic) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -565,19 +613,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     SettingsScreen(viewModel)
                 } else if (displayMode == DisplayMode.WEB && currentWebUrl != null) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Embedded Real Estate Input Area (Top)
-                        val showAIRealEstateTools by viewModel.showAIRealEstateTools.collectAsState()
-                        if (showAIRealEstateTools) {
-                            RealEstateInputArea(
-                                onDismiss = { viewModel.dismissAddressInput() },
-                                onConfirm = { address -> viewModel.analyzeRealEstate(address) },
-                                onChatWithAI = { viewModel.startAIChat() },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                isEnglish = isEnglish
-                            )
-                        }
+                        // Embedded Real Estate Input Area (Top) removed - moved to Dialog
 
                         AndroidView(
                             factory = { context ->
@@ -854,25 +890,28 @@ fun TopicButton(
     topic: AITopic, 
     dynamicItem: com.example.cltdiy.data.TopMenuItem? = null,
     isSelected: Boolean, 
+    isEnglish: Boolean,
     onClick: () -> Unit, 
     modifier: Modifier = Modifier
 ) {
     val icon = if (dynamicItem != null) {
         when (dynamicItem.icon.lowercase()) {
-            "newspaper" -> Icons.Default.Public // Newspaper not available in all sets, Public is safe
+            "newspaper" -> Icons.Default.Public
             "dollarsign.circle" -> Icons.Default.AttachMoney
-            "brain" -> Icons.Default.Face // Psychology might be missing in default set
+            "brain" -> Icons.Default.Psychology // Better match if available, else Face
             "hammer" -> Icons.Default.Build
             "fork.knife" -> Icons.Default.Restaurant
             "house" -> Icons.Default.Home
             "heart" -> Icons.Default.Favorite
             "square.grid.2x2" -> Icons.Default.Dashboard
             "directions car" -> Icons.Default.DirectionsCar
+            "bus.doubledecker" -> Icons.Default.DirectionsBus
+            "graduationcap" -> Icons.Default.School
             else -> Icons.Default.Dashboard
         }
     } else {
         when (topic) {
-            AITopic.AI_ANALYSIS -> Icons.Default.Face
+            AITopic.AI_ANALYSIS -> Icons.Default.Psychology
             AITopic.DIY -> Icons.Default.Build
             AITopic.FOOD -> Icons.Default.Restaurant
             AITopic.REAL_ESTATE -> Icons.Default.Home
@@ -880,46 +919,45 @@ fun TopicButton(
             AITopic.LIFE -> Icons.Default.Favorite
             AITopic.FINANCE_NEWS -> Icons.Default.AttachMoney
             AITopic.MISC -> Icons.Default.Dashboard
-
         }
     }
     
     val displayName = if (dynamicItem != null) {
-        val viewModel: TeacherViewModel = viewModel()
-        val appLanguage by viewModel.appLanguage.collectAsState()
-        if (appLanguage == AppLanguage.CHINESE) dynamicItem.chineseName else dynamicItem.englishName
+        if (!isEnglish) dynamicItem.chineseName else dynamicItem.englishName
     } else {
-        val viewModel: TeacherViewModel = viewModel()
-        val appLanguage by viewModel.appLanguage.collectAsState()
-        val isEnglish = appLanguage == AppLanguage.ENGLISH
         if (isEnglish) topic.englishName else topic.chineseName
     }
     
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.aspectRatio(1f), // Make it square-ish for better grid look
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) PrimaryPurple else Color.White,
-            contentColor = if (isSelected) Color.White else DarkGrey
+            containerColor = if (isSelected) PrimaryPurple else Color(0xFFF5F5F5),
+            contentColor = if (isSelected) Color.White else Color.Black
         ),
-        shape = RoundedCornerShape(12.dp),
-        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = if (isSelected) 4.dp else 1.dp),
-        border = if (!isSelected) ButtonDefaults.outlinedButtonBorder else null
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(8.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(28.dp),
+                tint = if (isSelected) Color.White else PrimaryPurple
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = displayName,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                textAlign = TextAlign.Center
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+                lineHeight = 14.sp
             )
         }
     }
@@ -993,7 +1031,7 @@ fun MessageList(messages: List<ChatMessage>, selectedTopic: AITopic) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(messages) { msg ->
+            items(messages.filter { !it.isHidden }) { msg ->
                 MessageBubble(msg)
             }
         }
