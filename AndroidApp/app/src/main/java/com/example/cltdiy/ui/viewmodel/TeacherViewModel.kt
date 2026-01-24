@@ -85,7 +85,17 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     val apiKeySetupReason = _apiKeySetupReason.asStateFlow()
 
     private val _hotListItems = MutableStateFlow<List<HotToolItem>>(emptyList())
+    // Allow observing raw items if needed, but UI should likely use userSpecificTools
     val hotListItems = _hotListItems.asStateFlow()
+
+    // Filtered list based on VIP level
+    val userSpecificTools = combine(_hotListItems, _userProfile) { items, profile ->
+        if (profile != null && profile.vipLevel >= 1) {
+            items
+        } else {
+            emptyList()
+        }
+    }
 
     private val _showHotToolWebView = MutableStateFlow(false)
     val showHotToolWebView = _showHotToolWebView.asStateFlow()
@@ -234,14 +244,24 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         userManager.logout()
     }
 
+    private val topMenuManager = com.example.cltdiy.data.TopMenuManager()
+
+    private fun fetchTopMenu() {
+        viewModelScope.launch(Dispatchers.IO) {
+             val items = topMenuManager.fetchTopMenu()
+             if (items.isNotEmpty()) {
+                 _topMenuItems.value = items
+                 // Refresh current topic display
+                 updateDisplayMode(_selectedTopic.value)
+             }
+        }
+    }
+
     private fun updateDisplayMode(topic: AITopic) {
         val isEnglish = _appLanguage.value == AppLanguage.ENGLISH
         
-        // Check if we have a dynamic menu item for this topic
-        val dynamicItem = _topMenuItems.value.find { 
-            it.englishName.equals(topic.englishName, ignoreCase = true) || 
-            it.chineseName.equals(topic.chineseName, ignoreCase = true) 
-        }
+        // Match by topic directly
+        val dynamicItem = _topMenuItems.value.find { it.topic == topic }
 
         if (dynamicItem != null) {
             _displayMode.value = DisplayMode.WEB
@@ -297,6 +317,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _showAddressInput.value = false
     }
 
+
     fun showAIRealEstateTools() {
         if (_selectedTopic.value == AITopic.REAL_ESTATE) {
             _showAIRealEstateTools.value = true
@@ -343,6 +364,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     text = text,
                     engine = _selectedEngine.value,
                     topic = _selectedTopic.value,
+                    language = _appLanguage.value,
                     image = image
                 )
                 val aiMsg = ChatMessage(text = response, isUser = false)
@@ -360,7 +382,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         if (image == null) return
         ttsManager.stop()
         setTopic(AITopic.DIY)
-        val msg = if (_appLanguage.value == AppLanguage.CHINESE) "我有DIY难题" else "I have a DIY problem"
+        val msg = if (_appLanguage.value == AppLanguage.CHINESE) "请解析这张图片中的问题" else "Please analyze the problem in this image"
         sendMessage(msg, image)
     }
 
@@ -369,8 +391,12 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _displayMode.value = DisplayMode.CHAT
         _showAIRealEstateTools.value = false // dismiss tools card
         
-        val prompt = "please analyze the property value of \"$address\". In your analysis, please include the following information: the total square footage, the number of bedrooms and bathrooms, and the current property tax rate. Please also include the owner of the property, the school information, and any other relevant details you can find."
-        sendMessage(prompt)
+        val prompt = if (_appLanguage.value == AppLanguage.CHINESE) 
+            "请分析房产地址 \"$address\" 的价值。请包括以下信息：总面积、卧室和浴室数量、目前的房产税率。请同时提供房产业主、学校信息以及你能找到的其他相关细节。" 
+        else 
+            "Please analyze the property value of \"$address\". In your analysis, please include the following information: the total square footage, the number of bedrooms and bathrooms, and the current property tax rate. Please also include the owner of the property, the school information, and any other relevant details you can find."
+        
+        sendMessage(prompt, null)
     }
 
     fun startAIChat() {
@@ -382,7 +408,6 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _messages.value = emptyList()
         ttsManager.stop()
         _displayMode.value = DisplayMode.CHAT
-        // Keeping current topic
         
         val welcomeText = if (_appLanguage.value == AppLanguage.CHINESE) {
             "我是 CyberPanda。我主要使用 ChatGPT 和 Gemini 作为 AI 后台，结合夏洛特本地的实际环境，为大家提供面向夏洛特华人的本地信息服务。我特别被设计为一个自己动手智能助手，重点帮助华人用户获取生活服务指南、办事流程说明，以及华人饮食与餐饮信息的分享与推荐，让在夏洛特的生活变得更加方便、高效、安心。"
@@ -420,75 +445,12 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _apiKeySetupReason.value = null
     }
 
-    private fun fetchTopMenu() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val text = java.net.URL("https://quantumpropertyllc.github.io/topmenu.txt").readText()
-                val items = text.lines()
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        val parts = line.split(",")
-                        if (parts.size >= 5) {
-                            TopMenuItem(
-                                icon = parts[0].trim(),
-                                englishName = parts[1].trim(),
-                                chineseName = parts[2].trim(),
-                                chineseUrl = parts[3].trim(),
-                                englishUrl = parts[4].trim()
-                            )
-                        } else if (parts.size == 4) {
-                            // Backward compatibility
-                            TopMenuItem(
-                                icon = parts[0].trim(),
-                                englishName = parts[1].trim(),
-                                chineseName = parts[2].trim(),
-                                chineseUrl = parts[3].trim(),
-                                englishUrl = parts[3].trim()
-                            )
-                        } else {
-                            null
-                        }
-                    }
-                if (items.isNotEmpty()) {
-                    _topMenuItems.value = items
-                    // Refresh current topic display to use dynamic URL if applicable
-                    updateDisplayMode(_selectedTopic.value)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
+    private val hotListManager = com.example.cltdiy.data.HotListManager()
 
     private fun fetchHotList() {
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val text = java.net.URL("https://quantumpropertyllc.github.io/hotlist.txt").readText()
-                val items = text.lines()
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { line ->
-                        val parts = line.split(",")
-                        if (parts.size >= 3) {
-                            HotToolItem(
-                                chineseName = parts[0].trim(),
-                                englishName = parts[1].trim(),
-                                url = parts[2].trim()
-                            )
-                        } else if (parts.size == 2) {
-                            // Backward compatibility or legacy format
-                            HotToolItem(
-                                chineseName = parts[0].trim(),
-                                englishName = parts[0].trim(),
-                                url = parts[1].trim()
-                            )
-                        } else {
-                            null
-                        }
-                    }
-                _hotListItems.value = items
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            val items = hotListManager.fetchHotList()
+            _hotListItems.value = items
         }
     }
 

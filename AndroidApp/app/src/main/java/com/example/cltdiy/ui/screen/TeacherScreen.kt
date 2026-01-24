@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -60,7 +62,6 @@ val LightGrey = Color(0xFFF5F5F7)
 @Composable
 fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     val messages by viewModel.messages.collectAsState()
-    val hotListItems by viewModel.hotListItems.collectAsState()
     val showHotToolWebView by viewModel.showHotToolWebView.collectAsState()
     val hotToolWebUrl by viewModel.hotToolWebUrl.collectAsState()
     val selectedTopic by viewModel.selectedTopic.collectAsState()
@@ -409,25 +410,30 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                         )
 
+
                         Divider()
                         
                         // Category 3: Tools
-                        Text(
-                            text = if (isEnglish) " Tools" else " 常用工具",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                        hotListItems.forEach { item ->
-                            val label = if (isEnglish) item.englishName else item.chineseName
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    showAIAndToolsMenu = false
-                                    viewModel.openHotTool(item.url)
-                                },
-                                leadingIcon = { Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        val userTools by viewModel.userSpecificTools.collectAsState(initial = emptyList())
+                        
+                        if (userTools.isNotEmpty()) {
+                            Text(
+                                text = if (isEnglish) " Tools" else " 常用工具",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             )
+                            userTools.forEach { item ->
+                                val label = if (isEnglish) item.englishName else item.chineseName
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        showAIAndToolsMenu = false
+                                        viewModel.openHotTool(item.url)
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                )
+                            }
                         }
                     }
                 }
@@ -454,13 +460,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 // Topic Grid
                 val topMenuItems by viewModel.topMenuItems.collectAsState()
                 val currentTopics = if (topMenuItems.isNotEmpty()) {
-                    // Try to map TopMenuItems back to AITopic if they exist
-                    topMenuItems.map { item ->
-                        AITopic.values().find { 
-                            it.englishName.equals(item.englishName, ignoreCase = true) || 
-                            it.chineseName.equals(item.chineseName, ignoreCase = true)
-                        } ?: AITopic.MISC // Group unknown as MISC
-                    }
+                    topMenuItems.map { it.topic }
                 } else {
                     listOf(
                         AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS, AITopic.FOOD,
@@ -780,29 +780,28 @@ fun TopicButton(
 ) {
     val icon = if (dynamicItem != null) {
         when (dynamicItem.icon.lowercase()) {
-            "top news" -> Icons.Default.Public
-            "finance" -> Icons.Default.Payments
-            "ai analysis" -> Icons.Default.Analytics
-            "ford" -> Icons.Default.DirectionsCar
-            "diy help" -> Icons.Default.Build
-            "real estate" -> Icons.Default.Home
-            "local life" -> Icons.Default.Favorite
-            "misc" -> Icons.Default.Dashboard
-            // Try to match icon string direct if it matches Material names
+            "newspaper" -> Icons.Default.Public // Newspaper not available in all sets, Public is safe
+            "dollarsign.circle" -> Icons.Default.AttachMoney
+            "brain" -> Icons.Default.Face // Psychology might be missing in default set
+            "hammer" -> Icons.Default.Build
+            "fork.knife" -> Icons.Default.Restaurant
+            "house" -> Icons.Default.Home
+            "heart" -> Icons.Default.Favorite
+            "square.grid.2x2" -> Icons.Default.Dashboard
+            "directions car" -> Icons.Default.DirectionsCar
             else -> Icons.Default.Dashboard
         }
     } else {
         when (topic) {
-            AITopic.AI_ANALYSIS -> Icons.Default.Analytics
+            AITopic.AI_ANALYSIS -> Icons.Default.Face
             AITopic.DIY -> Icons.Default.Build
             AITopic.FOOD -> Icons.Default.Restaurant
             AITopic.REAL_ESTATE -> Icons.Default.Home
             AITopic.WORLD_NEWS -> Icons.Default.Public
             AITopic.LIFE -> Icons.Default.Favorite
-            AITopic.FINANCE_NEWS -> Icons.Default.Payments
+            AITopic.FINANCE_NEWS -> Icons.Default.AttachMoney
             AITopic.MISC -> Icons.Default.Dashboard
             AITopic.FORD -> Icons.Default.DirectionsCar
-            else -> Icons.Default.Dashboard
         }
     }
     

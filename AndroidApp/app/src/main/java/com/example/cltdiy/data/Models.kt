@@ -9,23 +9,25 @@ enum class AIEngine(val rawValue: String) {
     CHATGPT("ChatGPT")
 }
 
+
 enum class AITopic(val chineseName: String, val englishName: String, val id: String) {
-    AI_ANALYSIS("AI深度分析", "AI Analysis", "AI深度分析"),
-    DIY("房屋维护", "DIY Help", "房屋维护"),
+    WORLD_NEWS("世界头条", "World News", "topNews"),
+    FINANCE_NEWS("财经头条", "Finance News", "financeNews"),
+    AI_ANALYSIS("AI深度分析", "AI Analysis", "aiAnalysis"),
     FOOD("夏村美食", "Charlotte Food", "food"),
-    REAL_ESTATE("房产助手", "Real Estate Assistant", "财产分析"),
-    WORLD_NEWS("世界头条", "World News", "世界头条"),
-    LIFE("本地生活", "Local Life", "本地生活"),
-    FINANCE_NEWS("财经头条", "Finance News", "财经头条"),
-    FORD("福特信息", "Ford", "ford"),
-    MISC("杂项", "Misc", "杂项")
+    DIY("房屋维护", "DIY Help", "diy"),
+    REAL_ESTATE("房产助手", "Real Estate Assistant", "realEstate"),
+    LIFE("本地生活", "Local Life", "life"),
+    MISC("杂项", "Misc", "misc"),
+    FORD("福特信息", "Ford", "ford") // Kept as extra from original
 }
 
 
 data class ChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val text: String,
-    val isUser: Boolean
+    val isUser: Boolean,
+    val isHidden: Boolean = false
 )
 
 data class HotToolItem(
@@ -40,7 +42,8 @@ data class TopMenuItem(
     val englishName: String,
     val chineseName: String,
     val chineseUrl: String,
-    val englishUrl: String
+    val englishUrl: String,
+    val topic: AITopic
 )
 
 data class UserProfile(
