@@ -247,6 +247,54 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
         )
     }
     
+    // Community Feature Screens
+    val showEventsView by viewModel.showEventsView.collectAsState()
+    val showMarketplaceView by viewModel.showMarketplaceView.collectAsState()
+    val showRentalsView by viewModel.showRentalsView.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
+    
+    if (showEventsView) {
+        Dialog(
+            onDismissRequest = { viewModel.closeEventsView() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                EventsScreen(
+                    userProfile = userProfile,
+                    onBack = { viewModel.closeEventsView() }
+                )
+            }
+        }
+    }
+    
+    if (showMarketplaceView) {
+        Dialog(
+            onDismissRequest = { viewModel.closeMarketplaceView() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                MarketplaceScreen(
+                    userProfile = userProfile,
+                    onBack = { viewModel.closeMarketplaceView() }
+                )
+            }
+        }
+    }
+    
+    if (showRentalsView) {
+        Dialog(
+            onDismissRequest = { viewModel.closeRentalsView() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                RentalsScreen(
+                    userProfile = userProfile,
+                    onBack = { viewModel.closeRentalsView() }
+                )
+            }
+        }
+    }
+    
     // AddressInputDialog removed
     
     errorMessage?.let { msg ->
@@ -379,6 +427,43 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                 viewModel.openAPIKeySetup()
                             },
                             leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null) }
+                        )
+                        
+                        Divider()
+                        
+                        // Category: Community Features
+                        Text(
+                            text = if (isEnglish) " Community" else " 社区服务",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                        
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Community Events" else "社区活动") },
+                            onClick = {
+                                showAIAndToolsMenu = false
+                                viewModel.showEventsView()
+                            },
+                            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) }
+                        )
+                        
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Marketplace" else "二手市场") },
+                            onClick = {
+                                showAIAndToolsMenu = false
+                                viewModel.showMarketplaceView()
+                            },
+                            leadingIcon = { Icon(Icons.Default.ShoppingCart, contentDescription = null) }
+                        )
+                        
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Rentals" else "房屋租赁") },
+                            onClick = {
+                                showAIAndToolsMenu = false
+                                viewModel.showRentalsView()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) }
                         )
                         
                         Divider()
@@ -1464,6 +1549,71 @@ fun RegisterDialog(
     var fullName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var agreedToTerms by remember { mutableStateOf(false) }
+    var showEULA by remember { mutableStateOf(false) }
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    
+    // EULA Dialog
+    if (showEULA) {
+        AlertDialog(
+            onDismissRequest = { showEULA = false },
+            title = { 
+                Text(
+                    "Generative AI & Content EULA",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "End User License Agreement (EULA)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    
+                    Text(
+                        """
+                        1. Agreement to Terms
+                        By using this application, you agree to these terms. If you do not agree, do not use the application.
+
+                        2. User Generated Content (UGC)
+                        Users may post content (Events, Marketplace Items, Rentals). You agree that you will not post content that is:
+                        • Illegal, harmful, or fraudulent
+                        • Hateful, harassing, or bullying
+                        • Pornographic or sexually explicit
+                        • Infringing on intellectual property rights
+
+                        3. Zero Tolerance Policy
+                        We have a zero-tolerance policy for objectionable content. Content found to be in violation will be removed immediately, and the user's account may be banned without warning.
+
+                        4. Reporting
+                        You agree to report any content that violates these terms using the 'Report' feature provided on content.
+
+                        5. Disclaimer
+                        The developers are not responsible for the content posted by users. Use the marketplace and rental sections at your own risk.
+                        
+                        6. Privacy Notice
+                        Your data is collected solely for account management and is securely stored. We do not share your personal information with third parties for marketing purposes.
+                        """.trimIndent(),
+                        fontSize = 13.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showEULA = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1505,6 +1655,110 @@ fun RegisterDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Terms and EULA Agreement
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = PrimaryPurple.copy(alpha = 0.05f)
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { agreedToTerms = !agreedToTerms }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = agreedToTerms,
+                            onCheckedChange = { agreedToTerms = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = PrimaryPurple
+                            )
+                        )
+                        
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            androidx.compose.ui.text.AnnotatedString.Builder().apply {
+                                if (isEnglish) {
+                                    append("I agree to the ")
+                                } else {
+                                    append("我同意 ")
+                                }
+                            }
+                            
+                            Text(
+                                text = if (isEnglish) 
+                                    "I agree to the Terms of Service and EULA" 
+                                else 
+                                    "我同意服务条款和最终用户许可协议",
+                                fontSize = 13.sp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            
+                            Row(
+                                modifier = Modifier.padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = if (isEnglish) "Terms of Service" else "服务条款",
+                                    color = PrimaryPurple,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.clickable {
+                                        uriHandler.openUri("https://cyberpandaapp.com/terms")
+                                    },
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                )
+                                
+                                Text(
+                                    text = "EULA",
+                                    color = PrimaryPurple,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.clickable {
+                                        showEULA = true
+                                    },
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                )
+                                
+                                Text(
+                                    text = if (isEnglish) "Privacy Policy" else "隐私政策",
+                                    color = PrimaryPurple,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.clickable {
+                                        uriHandler.openUri("https://cyberpandaapp.com/privacy")
+                                    },
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // Read Full EULA Button
+                            TextButton(
+                                onClick = { showEULA = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = PrimaryPurple
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isEnglish) "Read Full EULA & Policies" else "阅读完整的服务条款",
+                                    fontSize = 11.sp,
+                                    color = PrimaryPurple
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
                 TextButton(onClick = {
                     onDismiss()
                     onLoginClick()
@@ -1516,7 +1770,7 @@ fun RegisterDialog(
         confirmButton = {
             Button(
                 onClick = { onRegister(email, password, fullName, username, phone) },
-                enabled = email.isNotBlank() && password.isNotBlank() && username.isNotBlank()
+                enabled = email.isNotBlank() && password.isNotBlank() && username.isNotBlank() && agreedToTerms
             ) {
                 Text(if (isEnglish) "Register" else "注册")
             }

@@ -106,6 +106,16 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _showAIRealEstateTools = MutableStateFlow(false)
     val showAIRealEstateTools = _showAIRealEstateTools.asStateFlow()
+    
+    // Community Features - Events, Marketplace, Rentals
+    private val _showEventsView = MutableStateFlow(false)
+    val showEventsView = _showEventsView.asStateFlow()
+    
+    private val _showMarketplaceView = MutableStateFlow(false)
+    val showMarketplaceView = _showMarketplaceView.asStateFlow()
+    
+    private val _showRentalsView = MutableStateFlow(false)
+    val showRentalsView = _showRentalsView.asStateFlow()
 
     private val _speechRate = MutableStateFlow(1.0f)
     val speechRate = _speechRate.asStateFlow()
@@ -159,8 +169,46 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         
         try {
-           ttsManager = TTSManager(application)
-        } catch (e: Exception) { e.printStackTrace() }
+           ttsManager = TTSManager(
+               context = application,
+               onInitSuccess = {
+                   // TTS initialized successfully
+                   android.util.Log.d("TeacherViewModel", "✅ TTS ready for use")
+               },
+               onInitFailure = { error ->
+                   // Show user-friendly error message
+                   val isChinese = _appLanguage.value == AppLanguage.CHINESE
+                   val message = if (isChinese) {
+                       "⚠️ 语音播报不可用\n\n" +
+                       "这可能是因为：\n" +
+                       "1. 模拟器通常缺少 Google TTS 服务\n" +
+                       "2. TTS 语音引擎未安装\n\n" +
+                       "建议：\n" +
+                       "• 在真机上测试语音功能\n" +
+                       "• 或从 Play 商店安装 \"Google TTS\"\n\n" +
+                       "详细错误：$error"
+                   } else {
+                       "⚠️ Text-to-Speech Unavailable\n\n" +
+                       "This may be because:\n" +
+                       "1. Emulators often lack Google TTS service\n" +
+                       "2. TTS engine is not installed\n\n" +
+                       "Suggestions:\n" +
+                       "• Test audio features on a real device\n" +
+                       "• Or install \"Google Text-to-Speech\" from Play Store\n\n" +
+                       "Technical error: $error"
+                   }
+                   _errorMessage.value = message
+               }
+           )
+        } catch (e: Exception) { 
+            e.printStackTrace()
+            val isChinese = _appLanguage.value == AppLanguage.CHINESE
+            _errorMessage.value = if (isChinese) {
+                "无法初始化语音服务。请在真机上测试。"
+            } else {
+                "Failed to initialize TTS. Please test on a real device."
+            }
+        }
 
         try {
            speechManager = SpeechManager(application)
@@ -451,31 +499,43 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private var currentSequenceIndex = 0
 
     fun startSequentialListen() {
-        isSequentialReading = true
-        currentSequenceIndex = 0
-        
-        // Listen for specific "DONE_TOPIC" event only
-        ttsManager?.onSpeechCompleted = {
-            if (isSequentialReading) {
-                 // We don't distinguish ID here in the callback var, but we assume
-                 // if onDone fires and we are sequential, check if we need to proceed.
-                 // Ideally we should check the utteranceID from the callback, 
-                 // but existing TTSManager doesn't pass it back in the lambda.
-                 // Assuming the listener fires for the last item in the queue.
-                 
-                viewModelScope.launch {
-                    currentSequenceIndex++
-                    if (currentSequenceIndex < sequentialTopics.size) {
-                         readCurrentSequenceStep()
-                    } else {
-                        isSequentialReading = false
-                    }
+    // Check if TTS is ready
+    if (ttsManager?.isReady() != true) {
+        val isChinese = _appLanguage.value == AppLanguage.CHINESE
+        val message = if (isChinese) {
+            "语音播报服务不可用\n\n请在真机上测试此功能，或确保已安装 Google TTS。"
+        } else {
+            "Text-to-Speech service is unavailable\n\nPlease test this feature on a real device, or ensure Google TTS is installed."
+        }
+        showError(message)
+        return
+    }
+    
+    isSequentialReading = true
+    currentSequenceIndex = 0
+    
+    // Listen for specific "DONE_TOPIC" event only
+    ttsManager?.onSpeechCompleted = {
+        if (isSequentialReading) {
+             // We don't distinguish ID here in the callback var, but we assume
+             // if onDone fires and we are sequential, check if we need to proceed.
+             // Ideally we should check the utteranceID from the callback, 
+             // but existing TTSManager doesn't pass it back in the lambda.
+             // Assuming the listener fires for the last item in the queue.
+             
+            viewModelScope.launch {
+                currentSequenceIndex++
+                if (currentSequenceIndex < sequentialTopics.size) {
+                     readCurrentSequenceStep()
+                } else {
+                    isSequentialReading = false
                 }
             }
         }
-        
-        readCurrentSequenceStep()
     }
+    
+    readCurrentSequenceStep()
+}
     
     fun stopSequentialListen() {
          isSequentialReading = false
@@ -758,6 +818,31 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     fun closeHotTool() {
         _showHotToolWebView.value = false
         _hotToolWebUrl.value = null
+    }
+    
+    // Community Features Navigation
+    fun showEventsView() {
+        _showEventsView.value = true
+    }
+    
+    fun closeEventsView() {
+        _showEventsView.value = false
+    }
+    
+    fun showMarketplaceView() {
+        _showMarketplaceView.value = true
+    }
+    
+    fun closeMarketplaceView() {
+        _showMarketplaceView.value = false
+    }
+    
+    fun showRentalsView() {
+        _showRentalsView.value = true
+    }
+    
+    fun closeRentalsView() {
+        _showRentalsView.value = false
     }
 
     private fun handleError(error: String?) {
