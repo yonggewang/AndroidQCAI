@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import org.jsoup.Jsoup
 
 enum class DisplayMode {
     WEB, CHAT, SETTINGS
@@ -90,7 +91,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     // Filtered list based on VIP level
     val userSpecificTools = combine(_hotListItems, _userProfile) { items, profile ->
-        if (profile != null && profile.vipLevel >= 1) {
+        if (profile != null && profile.vipLevel > 0) {
             items
         } else {
             emptyList()
@@ -135,7 +136,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         // Initial URL setup
         // Initial URL setup
         updateDisplayMode(AITopic.WORLD_NEWS)
-        fetchHotList()
+        refreshHotToolList()
         
         // Robust fetch with retry for startup
         viewModelScope.launch {
@@ -178,6 +179,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 
                 if (profile != null) {
                     _userName.value = if (profile.username.isNotBlank()) profile.username else profile.fullName
+                    // Auto-refresh hot list when user is detected (auto-login or manual)
+                    refreshHotToolList()
                 } else {
                     val isChinese = _appLanguage.value == AppLanguage.CHINESE
                     _userName.value = if (isChinese) "访客" else "Guest"
@@ -207,9 +210,17 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         } else {
              // Refresh logged in name if needed, though profile name doesn't change with language usually
         }
+
+        // Update TTS language
+        val locale = if (language == AppLanguage.CHINESE) java.util.Locale.CHINESE else java.util.Locale.US
+        ttsManager?.setLanguage(locale)
     }
 
     fun setTopic(topic: AITopic) {
+        // If user manually changes topic, stop any auto-sequence
+        if (isSequentialReading) {
+            stopSequentialListen()
+        }
         _selectedTopic.value = topic
         ttsManager?.stop()
         updateDisplayMode(topic)
@@ -262,6 +273,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
              val result = manager.login(email, pass)
              if (result.isSuccess) {
                  _showLoginDialog.value = false
+                 refreshHotToolList() // Refresh tools for the new user
              } else {
                  showError(result.exceptionOrNull()?.message ?: "Login Failed")
              }
@@ -364,10 +376,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
                 }
 
-                else -> {
-                    _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://quantumpropertyllc.github.io/news/topnews.html"
-                }
+                // else branch removed as all enum cases are covered or will be covered
+                // The 'when' is exhaustive.
             }
         }
         
@@ -430,6 +440,139 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 ttsManager?.speak(response)
             } catch (e: Exception) {
                 handleError(e.message)
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private var isSequentialReading = false
+    private val sequentialTopics = listOf(AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS)
+    private var currentSequenceIndex = 0
+
+    fun startSequentialListen() {
+        isSequentialReading = true
+        currentSequenceIndex = 0
+        
+        // Listen for specific "DONE_TOPIC" event only
+        ttsManager?.onSpeechCompleted = {
+            if (isSequentialReading) {
+                 // We don't distinguish ID here in the callback var, but we assume
+                 // if onDone fires and we are sequential, check if we need to proceed.
+                 // Ideally we should check the utteranceID from the callback, 
+                 // but existing TTSManager doesn't pass it back in the lambda.
+                 // Assuming the listener fires for the last item in the queue.
+                 
+                viewModelScope.launch {
+                    currentSequenceIndex++
+                    if (currentSequenceIndex < sequentialTopics.size) {
+                         readCurrentSequenceStep()
+                    } else {
+                        isSequentialReading = false
+                    }
+                }
+            }
+        }
+        
+        readCurrentSequenceStep()
+    }
+    
+    fun stopSequentialListen() {
+         isSequentialReading = false
+         ttsManager?.stop()
+    }
+    
+    private fun readCurrentSequenceStep() {
+        if (currentSequenceIndex >= sequentialTopics.size) return
+        
+        val topic = sequentialTopics[currentSequenceIndex]
+        
+        // Update UI logic similar to setTopic, but don't call setTopic directly to avoid stopping TTS prematurely if we were to change logic later.
+        // Actually setTopic stops TTS, which is correct because we are starting a NEW speech segment.
+        _selectedTopic.value = topic
+        updateDisplayMode(topic) // load the URL
+        
+        
+        val url = _currentWebUrl.value
+        if (url == null) {
+            showError("No URL found for topic: $topic")
+            stopSequentialListen()
+            return
+        }
+
+        _isLoading.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val doc = Jsoup.connect(url).timeout(10000).get()
+                
+                
+                // Smart parsing:
+                // Select generic content blocks to separate them
+                val elements = doc.select("h1, h2, h3, li, p")
+                val textParts = if (elements.isNotEmpty()) {
+                    elements.eachText().filter { it.isNotBlank() }
+                } else {
+                    // Fallback if no structure found
+                    listOf(doc.body().text())
+                }
+
+                // Add intro text (Flush previous)
+                val isChinese = _appLanguage.value == AppLanguage.CHINESE
+                val intro = if (isChinese) {
+                    when(topic) {
+                       AITopic.WORLD_NEWS -> "现在为您播报：世界头条"
+                       AITopic.FINANCE_NEWS -> "接下来是：财经头条"
+                       AITopic.AI_ANALYSIS -> "最后为您播报：AI深度分析"
+                       else -> ""
+                    }
+                } else {
+                    when(topic) {
+                       AITopic.WORLD_NEWS -> "Now reading: Headline News"
+                       AITopic.FINANCE_NEWS -> "Next up: Finance News"
+                       AITopic.AI_ANALYSIS -> "Finally: AI Deep Analysis"
+                       else -> ""
+                    }
+                }
+                
+                // 1. Speak Intro (Flush)
+                ttsManager?.speak(intro, null, android.speech.tts.TextToSpeech.QUEUE_FLUSH)
+                ttsManager?.playSilence(600, android.speech.tts.TextToSpeech.QUEUE_ADD, null)
+                
+                // 2. Speak Items (Add)
+                if (textParts.isEmpty()) {
+                     // Just finish if empty
+                     // Trigger a silent utterance with ID to signal completion
+                     ttsManager?.playSilence(100, android.speech.tts.TextToSpeech.QUEUE_ADD, "SEQ_DONE_$currentSequenceIndex")
+                } else {
+                    textParts.forEachIndexed { index, part ->
+                        val isLast = index == textParts.lastIndex
+                        // Only the very last item gets the ID that triggers the next topic
+                        val id = if (isLast) "SEQ_DONE_$currentSequenceIndex" else null
+                        
+                        ttsManager?.speak(part, id, android.speech.tts.TextToSpeech.QUEUE_ADD)
+                        
+                        if (!isLast) {
+                            // Pause between news items
+                            ttsManager?.playSilence(800, android.speech.tts.TextToSpeech.QUEUE_ADD, null) 
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // If error, try skip to next? 
+                launch {
+                    val errorMsg = if (currentSequenceIndex == 0) "Failed to load news" else null
+                    if (errorMsg != null) showError(errorMsg)
+
+                    // Short delay then next
+                    kotlinx.coroutines.delay(1000)
+                    currentSequenceIndex++
+                    if (currentSequenceIndex < sequentialTopics.size) {
+                        readCurrentSequenceStep()
+                    } else {
+                        isSequentialReading = false
+                    }
+                }
             } finally {
                 _isLoading.value = false
             }
@@ -598,7 +741,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val hotListManager by lazy { com.example.cltdiy.data.HotListManager() }
 
-    private fun fetchHotList() {
+    fun refreshHotToolList() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val items = hotListManager.fetchHotList()

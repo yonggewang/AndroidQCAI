@@ -74,7 +74,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     val isRecording by viewModel.isRecording.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val showAddressInput by viewModel.showAddressInput.collectAsState()
+    // val showAddressInput by viewModel.showAddressInput.collectAsState()
     val showAPIKeySetup by viewModel.showAPIKeySetup.collectAsState()
     val context = LocalContext.current
 
@@ -121,18 +121,31 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
         ) {
             Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
+                    // Header Bar
+                    Surface(
+                        shadowElevation = 4.dp,
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     ) {
-                        IconButton(
-                            onClick = { viewModel.closeHotTool() },
-                            modifier = Modifier.align(Alignment.CenterEnd)
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+                             IconButton(onClick = { viewModel.closeHotTool() }) {
+                                 Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                             }
+                             Text(
+                                 text = if (isEnglish) "Tool Viewer" else "工具浏览",
+                                 style = MaterialTheme.typography.titleMedium,
+                                 modifier = Modifier.weight(1f).padding(start = 16.dp)
+                             )
+                             IconButton(onClick = { viewModel.closeHotTool() }) {
+                                 Icon(Icons.Default.Close, contentDescription = "Close")
+                             }
                         }
                     }
+                    
+                    Box(modifier = Modifier.weight(1f)) {
+                    // AndroidView is now inside the Box
                     AndroidView(
                         factory = { context ->
                             WebView(context).apply {
@@ -164,13 +177,15 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             }
                         },
                         update = { view ->
-                            // Update logic if needed
+                             // Ensure we can go back if user navigates within the webview
+                             view.tag = "HotToolWebView" 
                         }
                     )
-                    }
+                    } // End Box
                 }
             }
         }
+    }
     
     if (showAPIKeySetup) {
         APIKeySetupDialog(
@@ -270,6 +285,9 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+                val userName by viewModel.userName.collectAsState()
+
                 // Language Switcher
                 Surface(
                     shape = RoundedCornerShape(20.dp),
@@ -293,88 +311,43 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                
-                var showUserProfileMenu by remember { mutableStateOf(false) }
-                val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-                val userName by viewModel.userName.collectAsState()
 
-                if (isLoggedIn) {
-                   Text(
-                       text = userName,
-                       style = MaterialTheme.typography.bodyMedium,
-                       fontWeight = FontWeight.Bold,
-                       color = PrimaryPurple
-                   )
-                   Spacer(Modifier.width(8.dp))
-                }
-
-                Box {
-                    IconButton(
-                        onClick = { showUserProfileMenu = true },
-                        modifier = Modifier.size(32.dp)
+                // Listen Button
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = PrimaryPurple,
+                    modifier = Modifier
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { viewModel.startSequentialListen() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = "User Profile",
-                            tint = if (isLoggedIn) PrimaryPurple else Color.Gray
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Listen",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-                    
-                    DropdownMenu(
-                        expanded = showUserProfileMenu,
-                        onDismissRequest = { showUserProfileMenu = false }
-                    ) {
-                        if (isLoggedIn) {
-                            DropdownMenuItem(
-                                text = { Text(userName) },
-                                onClick = { showUserProfileMenu = false },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-                            )
-                            Divider()
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Logout" else "退出登录") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.logout() 
-                                },
-                                leadingIcon = { Icon(Icons.Default.ExitToApp, contentDescription = null) }
-                            )
-                        } else {
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Login" else "登录") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.openLogin() 
-                                },
-                                leadingIcon = { Icon(Icons.Default.Login, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Register" else "注册") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.openRegister()
-                                },
-                                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) }
-                            )
-                        }
-                        
-                        Divider()
-                        DropdownMenuItem(
-                            text = { Text(if (isEnglish) "Settings" else "设置") },
-                            onClick = { 
-                                showUserProfileMenu = false
-                                viewModel.openSettings() 
-                            },
-                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
-                        )
+                        Spacer(Modifier.width(4.dp))
+                         Text(
+                             text = if (isEnglish) "Listen" else "播",
+                             color = Color.White,
+                             fontSize = 12.sp,
+                             fontWeight = FontWeight.Bold
+                         )
                     }
                 }
-
                 Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
                 
+                // Removed User Profile Block from here
+
                 // Merged AI Tools Dropdown
                 var showAIAndToolsMenu by remember { mutableStateOf(false) }
-                val selectedEngine by viewModel.selectedEngine.collectAsState()
+                // val selectedEngine by viewModel.selectedEngine.collectAsState()
 
                 Box {
                     Row(
@@ -533,6 +506,85 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     }
                 }
 
+                Spacer(Modifier.width(8.dp))
+                
+                // User Profile Menu (Previously Left, Moved to Right)
+                var showUserProfileMenu by remember { mutableStateOf(false) }
+                // val isLoggedIn by viewModel.isLoggedIn.collectAsState() // Moved to top
+                // val userName by viewModel.userName.collectAsState() // Moved to top
+
+                if (isLoggedIn) {
+                   Text(
+                       text = userName,
+                       style = MaterialTheme.typography.bodyMedium,
+                       fontWeight = FontWeight.Bold,
+                       color = PrimaryPurple
+                   )
+                   Spacer(Modifier.width(8.dp))
+                }
+
+                Box {
+                    IconButton(
+                        onClick = { showUserProfileMenu = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "User Profile",
+                            tint = if (isLoggedIn) PrimaryPurple else Color.Gray
+                        )
+                    }
+                    
+                    DropdownMenu(
+                        expanded = showUserProfileMenu,
+                        onDismissRequest = { showUserProfileMenu = false }
+                    ) {
+                        if (isLoggedIn) {
+                            DropdownMenuItem(
+                                text = { Text(userName) },
+                                onClick = { showUserProfileMenu = false },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
+                            )
+                            Divider()
+                            DropdownMenuItem(
+                                text = { Text(if (isEnglish) "Logout" else "退出登录") },
+                                onClick = { 
+                                    showUserProfileMenu = false
+                                    viewModel.logout() 
+                                },
+                                leadingIcon = { Icon(Icons.Default.ExitToApp, contentDescription = null) }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text(if (isEnglish) "Login" else "登录") },
+                                onClick = { 
+                                    showUserProfileMenu = false
+                                    viewModel.openLogin() 
+                                },
+                                leadingIcon = { Icon(Icons.Default.Login, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (isEnglish) "Register" else "注册") },
+                                onClick = { 
+                                    showUserProfileMenu = false
+                                    viewModel.openRegister()
+                                },
+                                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) }
+                            )
+                        }
+                        
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Settings" else "设置") },
+                            onClick = { 
+                                showUserProfileMenu = false
+                                    viewModel.openSettings() 
+                            },
+                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
+                        )
+                    }
+                }
+
 
             }
         }
@@ -548,18 +600,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Deleted Engine Switch from here
                 
-                // Add explicit refresh button for Dynamic Menu debugging/verification
-                Button(
-                    onClick = { 
-                        viewModel.fetchTopMenu() 
-                    },
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (isEnglish) "Refresh Menu Data" else "刷新菜单数据", fontSize = 12.sp)
-                }
+                // Refresh button removed
 
                 Spacer(modifier = Modifier.height(12.dp))
                 
