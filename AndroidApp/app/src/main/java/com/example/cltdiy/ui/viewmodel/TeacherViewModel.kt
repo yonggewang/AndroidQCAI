@@ -11,6 +11,7 @@ import com.example.cltdiy.data.AppLanguage
 import com.example.cltdiy.data.ChatMessage
 import com.example.cltdiy.data.HotToolItem
 import com.example.cltdiy.data.TopMenuItem
+import com.example.cltdiy.data.Recommendation
 import com.example.cltdiy.data.PreferenceManager
 import kotlinx.coroutines.Dispatchers
 import com.example.cltdiy.utils.SpeechManager
@@ -103,6 +104,12 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _hotToolWebUrl = MutableStateFlow<String?>(null)
     val hotToolWebUrl = _hotToolWebUrl.asStateFlow()
+
+    private val _recommendations = MutableStateFlow<List<Recommendation>>(emptyList())
+    val recommendations = _recommendations.asStateFlow()
+
+    private val _vibeHistory = MutableStateFlow<List<Recommendation>>(emptyList())
+    val vibeHistory = _vibeHistory.asStateFlow()
 
     private val _showAIRealEstateTools = MutableStateFlow(false)
     val showAIRealEstateTools = _showAIRealEstateTools.asStateFlow()
@@ -244,7 +251,86 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         
+        loadVibeHistory()
+    }
 
+    private fun loadVibeHistory() {
+        try {
+            val json = PreferenceManager.vibeHistoryJson
+            val array = org.json.JSONArray(json)
+            val history = mutableListOf<Recommendation>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                history.add(Recommendation(
+                    name = obj.getString("name"),
+                    score = obj.getInt("score"),
+                    reason = obj.getString("reason")
+                ))
+            }
+            _vibeHistory.value = history
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    private fun saveVibeHistory() {
+        try {
+            val array = org.json.JSONArray()
+            _vibeHistory.value.forEach { rec ->
+                val obj = org.json.JSONObject()
+                obj.put("name", rec.name)
+                obj.put("score", rec.score)
+                obj.put("reason", rec.reason)
+                array.put(obj)
+            }
+            PreferenceManager.vibeHistoryJson = array.toString()
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    private fun parseRecommendations(text: String) {
+        if (!text.contains("MATCH_SCORE_JSON")) return
+        
+        try {
+            val startIdx = text.indexOf("MATCH_SCORE_JSON")
+            val jsonPart = text.substring(startIdx)
+            val firstBrace = jsonPart.indexOf("{")
+            val lastBrace = jsonPart.lastIndexOf("}")
+            if (firstBrace == -1 || lastBrace == -1) return
+            
+            val jsonStr = jsonPart.substring(firstBrace, lastBrace + 1)
+            val json = org.json.JSONObject(jsonStr)
+            
+            // Handle both single object or array
+            val recList = mutableListOf<Recommendation>()
+            if (json.has("recommendations")) {
+                val arr = json.getJSONArray("recommendations")
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    recList.add(Recommendation(name = obj.getString("name"), score = obj.getInt("score"), reason = obj.getString("reason")))
+                }
+            } else if (json.has("name") && json.has("score")) {
+                recList.add(Recommendation(name = json.getString("name"), score = json.getInt("score"), reason = json.getString("reason")))
+            }
+            
+            if (recList.isNotEmpty()) {
+                _recommendations.value = recList
+                
+                // Update history
+                val currentHistory = _vibeHistory.value.toMutableList()
+                recList.forEach { rec ->
+                    if (!currentHistory.any { it.name == rec.name }) {
+                        currentHistory.add(0, rec)
+                    }
+                }
+                
+                val limitedHistory = if (currentHistory.size > 10) currentHistory.take(10) else currentHistory
+                _vibeHistory.value = limitedHistory
+                saveVibeHistory()
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    fun clearVibeHistory() {
+        _vibeHistory.value = emptyList()
+        saveVibeHistory()
     }
 
     fun setLanguage(language: AppLanguage) {
@@ -385,7 +471,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         // Match by topic directly
         val dynamicItem = _topMenuItems.value.find { it.topic == topic }
 
-        if (dynamicItem != null) {
+        if (dynamicItem != null && topic != AITopic.CLT_VIBE) {
             _displayMode.value = DisplayMode.WEB
             _currentWebUrl.value = if (isEnglish) dynamicItem.englishUrl else dynamicItem.chineseUrl
         } else {
@@ -422,6 +508,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 AITopic.LIFE -> {
                     _displayMode.value = DisplayMode.WEB
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
+                }
+                AITopic.CLT_VIBE -> {
+                    _displayMode.value = DisplayMode.CHAT
                 }
 
                 // else branch removed as all enum cases are covered or will be covered
@@ -485,6 +574,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 )
                 val aiMsg = ChatMessage(text = response, isUser = false)
                 _messages.value = _messages.value + aiMsg
+                
+                if (_selectedTopic.value == AITopic.CLT_VIBE) {
+                    parseRecommendations(response)
+                }
+                
                 ttsManager?.speak(response)
             } catch (e: Exception) {
                 handleError(e.message)
@@ -744,6 +838,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 )
                 val aiMsg = ChatMessage(text = response, isUser = false)
                 _messages.value = _messages.value + aiMsg
+
+                if (effectiveTopic == AITopic.CLT_VIBE) {
+                    parseRecommendations(response)
+                }
+
                 ttsManager?.speak(response)
             } catch (e: Exception) {
                 handleError(e.message)
@@ -764,9 +863,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _displayMode.value = DisplayMode.CHAT
         
         val welcomeText = if (_appLanguage.value == AppLanguage.CHINESE) {
-            "我是 CyberPanda。我主要使用 ChatGPT 和 Gemini 作为 AI 后台，结合夏洛特本地的实际环境，为大家提供面向夏洛特华人的本地信息服务。我特别被设计为一个自己动手智能助手，重点帮助华人用户获取生活服务指南、办事流程说明，以及华人饮食与餐饮信息的分享与推荐，让在夏洛特的生活变得更加方便、高效、安心。"
+            "我是 Queen City AI。我主要使用 ChatGPT 和 Gemini 作为 AI 后台，结合夏洛特本地的实际环境，为大家提供面向夏洛特华人的本地信息服务。我特别被设计为一个自己动手智能助手，重点帮助华人用户获取生活服务指南、办事流程说明，以及华人饮食与餐饮信息的分享与推荐，让在夏洛特的生活变得更加方便、高效、安心。"
         } else {
-            "I am CyberPanda. I primarily use ChatGPT and Gemini as the AI engine, combined with the local environment of Charlotte, to provide local information services for the Charlotte community. I am specifically designed as a DIY smart assistant, focusing on helping users get life service guides, procedure explanations, and sharing and recommending Chinese food and catering information, making life in Charlotte more convenient, efficient, and secure."
+            "I am Queen City AI. I primarily use ChatGPT and Gemini as the AI engine, combined with the local environment of Charlotte, to provide local information services for the Charlotte community. I am specifically designed as a DIY smart assistant, focusing on helping users get life service guides, procedure explanations, and sharing and recommending Chinese food and catering information, making life in Charlotte more convenient, efficient, and secure."
         }
         ttsManager?.speak(welcomeText)
     }

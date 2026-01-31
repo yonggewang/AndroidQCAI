@@ -24,7 +24,10 @@ class AIService {
 
     private val openAIEndpoint = "https://api.openai.com/v1/chat/completions"
     // Matching iOS endpoint
-    private val geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
+    private val geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    private val geminiEmbedEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+    private val pineconeEndpoint = "https://clt-vibe-rag-e13kol2.svc.aped-4627-b74a.pinecone.io/query"
+    private val pineconeKey = "pcsk_7HuA7A_7T3VQ5Fuq6dTk6hwJPZedEJKU5Rk4pDk4PngnJstzMYSGzbpWJrwGaswWNUVNZj"
     private val vercelEndpoint = "https://vercel-backendcltai.vercel.app/api/analyze"
 
     suspend fun sendMessage(
@@ -35,10 +38,20 @@ class AIService {
         image: Bitmap? = null,
         realEstateAddress: String? = null
     ): String {
-        val systemPrompt = generateSystemPrompt(topic, engine, language)
+        var context = ""
+        val geminiKey = PreferenceManager.geminiKey
+
+        // RAG Logic for CLT Vibe
+        if (topic == AITopic.CLT_VIBE && geminiKey.isNotEmpty()) {
+            val ragContext = fetchContextFromPinecone(text, geminiKey)
+            if (ragContext != null) {
+                context = "\n\n【Local Context from RAG】:\n$ragContext"
+            }
+        }
+
+        val systemPrompt = generateSystemPrompt(topic, engine, language) + context
         
         val openAIKey = PreferenceManager.openAIKey
-        val geminiKey = PreferenceManager.geminiKey
 
         return when (engine) {
             AIEngine.CHATGPT -> {
@@ -67,14 +80,14 @@ class AIService {
         
         var basePrompt = if (isEnglish) {
             """
-            You are the intelligent assistant for the "Charlotte Chinese AI Hub", primarily serving the Chinese community in Charlotte, North Carolina.
-            Your name is "Charlotte Intelligent Helper".
+            You are the intelligent assistant for the "QCAI", primarily serving the Chinese community in Charlotte, North Carolina.
+            Your name is "QCAI Assistant".
             Please answer questions in English.
             """.trimIndent()
         } else {
             """
-            你是“夏村华人AI大全”的智能助手，主要服务于美国北卡罗来纳州夏洛特（Charlotte, NC）的华人社区。
-            你的名字是“夏洛特智能帮手”。
+            你是夏洛特的智能助手，主要服务于美国北卡罗来纳州夏洛特（Charlotte, NC）的华人社区。
+            你的名字是“QCAI”。
             请用中文回答问题。
             """.trimIndent()
         }
@@ -93,6 +106,7 @@ class AIService {
                 AITopic.LIFE -> "\nCurrent Mode: North Carolina Life Advisor."
                 AITopic.FINANCE_NEWS -> "\nCurrent Mode: Finance News Expert."
                 AITopic.MISC -> "\nCurrent Mode: Miscellaneous Information Assistant."
+                AITopic.CLT_VIBE -> "\nYou are the QCAI Concierge and Charlotte expert. You are an expert on Charlotte, NC. You know the CATS Blue Line schedule, trash pickup zones (Orange/Green weeks), and neighborhood boundaries. When providing recommendations, use the context provided to give specific names and vibes. If the user asks for places, try to format your response to include a 'MATCH_SCORE_JSON' block if possible."
             }
         } else {
             when (topic) {
@@ -104,10 +118,102 @@ class AIService {
                 AITopic.LIFE -> "\n当前模式：北卡生活点滴。"
                 AITopic.FINANCE_NEWS -> "\n当前模式：财经头条专家。"
                 AITopic.MISC -> "\n当前模式：杂项信息助手。"
+                AITopic.CLT_VIBE -> """
+                你是夏洛特（Charlotte, NC）的本地生活专家（QCAI 管家）。你的目标是为华人社区提供极其精准且实用的本地指南。
+                
+                【垃圾与回收规则】：
+                - 如果查询结果显示为“Orange”或“Green”周，请直接告诉用户：“本周是您的回收周，请把【垃圾桶】和【回收桶】都推出来。”
+                - 如果本周不是该区域的回收周，请告诉用户：“本周只需推【垃圾桶】。”
+                - 必须明确告知用户具体的【清运星期几】（例如：每周四）。
+                
+                【重要执行指令】：
+                1. 严禁客套话。
+                2. 必须基于【Local Context from RAG】事实回答。
+                3. 每条推荐必须包含具体的店名/地点、地址以及 Vibe 描述。
+                4. 回答末尾必须包含 MATCH_SCORE_JSON 块。
+                
+                请立即开始为您服务：
+                """.trimIndent()
             }
         }
         
         return basePrompt + suffix
+    }
+
+    private suspend fun fetchContextFromPinecone(query: String, apiKey: String): String? = withContext(Dispatchers.IO) {
+        try {
+            // 1. Get Embedding from Gemini
+            val embedding = getGeminiEmbedding(query, apiKey) ?: return@withContext null
+            
+            // 2. Query Pinecone
+            val body = JSONObject()
+            val vector = JSONArray()
+            embedding.forEach { vector.put(it) }
+            body.put("vector", vector)
+            body.put("topK", 3)
+            body.put("includeMetadata", true)
+            
+            val request = Request.Builder()
+                .url(pineconeEndpoint)
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .addHeader("Api-Key", pineconeKey)
+                .build()
+            
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                
+                val json = JSONObject(response.body?.string() ?: "")
+                val matches = json.optJSONArray("matches") ?: return@withContext null
+                val contextStr = StringBuilder()
+                for (i in 0 until matches.length()) {
+                    val match = matches.getJSONObject(i)
+                    val metadata = match.optJSONObject("metadata") ?: continue
+                    val name = metadata.optString("name")
+                    val desc = metadata.optString("description")
+                    contextStr.append("- $name: $desc\n")
+                }
+                return@withContext contextStr.toString()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private suspend fun getGeminiEmbedding(text: String, apiKey: String): List<Double>? = withContext(Dispatchers.IO) {
+        val url = "$geminiEmbedEndpoint?key=$apiKey"
+        
+        val content = JSONObject()
+        val parts = JSONArray()
+        parts.put(JSONObject().put("text", text))
+        content.put("parts", parts)
+        
+        val body = JSONObject()
+        body.put("model", "models/text-embedding-004")
+        body.put("content", content)
+        
+        val request = Request.Builder()
+            .url(url)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                
+                val json = JSONObject(response.body?.string() ?: "")
+                val embedding = json.optJSONObject("embedding") ?: return@withContext null
+                val values = embedding.optJSONArray("values") ?: return@withContext null
+                val result = mutableListOf<Double>()
+                for (i in 0 until values.length()) {
+                    result.add(values.getDouble(i))
+                }
+                return@withContext result
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     private suspend fun sendToChatGPT(apiKey: String, prompt: String, userMessage: String, image: Bitmap?): String = withContext(Dispatchers.IO) {

@@ -37,4 +37,10 @@ object PreferenceManager {
     var speechPitch: Float
         get() = prefs.getFloat(KEY_PITCH, 1.0f)
         set(value) = prefs.edit().putFloat(KEY_PITCH, value).apply()
+
+    private const val KEY_VIBE_HISTORY = "vibe_history"
+
+    var vibeHistoryJson: String
+        get() = prefs.getString(KEY_VIBE_HISTORY, "[]") ?: "[]"
+        set(value) = prefs.edit().putString(KEY_VIBE_HISTORY, value).apply()
 }

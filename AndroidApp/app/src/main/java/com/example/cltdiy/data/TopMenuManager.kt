@@ -56,9 +56,10 @@ class TopMenuManager {
         val items = mutableListOf<TopMenuItem>()
         val lines = text.lines()
         var topicIndex = 0
-
         for (line in lines) {
             try {
+                if (topicIndex >= 7) break // Only take first 7 from file
+                
                 val trimmedLine = line.trim()
                 if (trimmedLine.isEmpty()) continue
 
@@ -73,24 +74,31 @@ class TopMenuManager {
                     val urlCn = components[3].trim()
                     val urlEn = components[4].trim()
 
-                    if (topicIndex < topics.size) {
-                        items.add(TopMenuItem(
-                            icon = icon,
-                            englishName = nameEn,
-                            chineseName = nameCn,
-                            chineseUrl = urlCn,
-                            englishUrl = urlEn,
-                            topic = topics[topicIndex]
-                        ))
-                        topicIndex++
-                    }
+                    items.add(TopMenuItem(
+                        icon = icon,
+                        englishName = nameEn,
+                        chineseName = nameCn,
+                        chineseUrl = urlCn,
+                        englishUrl = urlEn,
+                        topic = topics[topicIndex]
+                    ))
+                    topicIndex++
                 }
             } catch (e: Exception) {
-                // Continue to next line if one fails
                 e.printStackTrace()
             }
-            if (topicIndex >= topics.size) break
         }
+        
+        // Always add CLT Vibe as the 8th item
+        items.add(TopMenuItem(
+            icon = "crown.fill", // SF symbol equivalent or handled by icon logic
+            englishName = "CLT Vibe",
+            chineseName = "夏洛特 Vibe",
+            chineseUrl = "",
+            englishUrl = "",
+            topic = AITopic.CLT_VIBE
+        ))
+        
         return items
     }
 }

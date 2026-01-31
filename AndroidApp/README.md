@@ -1,6 +1,6 @@
-# CLTDIY Android App
+# QCAI Android App
 
-This is the Android port of the CLTDIY iOS app.
+This is the Android port of the Queen City AI app.
 
 ## How to Build
 

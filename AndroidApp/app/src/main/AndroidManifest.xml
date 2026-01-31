@@ -21,16 +21,16 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="CLTDIY"
+        android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.CLTDIY"
+        android:theme="@style/Theme.QCAI"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
             android:name="com.example.cltdiy.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.CLTDIY">
+            android:theme="@style/Theme.QCAI">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

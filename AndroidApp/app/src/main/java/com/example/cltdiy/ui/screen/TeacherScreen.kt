@@ -696,7 +696,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 } else {
                     listOf(
                         AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS, AITopic.FOOD,
-                        AITopic.DIY, AITopic.REAL_ESTATE, AITopic.LIFE, AITopic.MISC
+                        AITopic.DIY, AITopic.REAL_ESTATE, AITopic.LIFE, AITopic.MISC, AITopic.CLT_VIBE
                     )
                 }
                 
@@ -735,97 +735,101 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             
             // Main Content Area
             Box(modifier = Modifier.weight(1f)) {
-                if (displayMode == DisplayMode.SETTINGS) {
-                    SettingsScreen(viewModel)
-                } else if (displayMode == DisplayMode.WEB && currentWebUrl != null) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Embedded Real Estate Input Area (Top) removed - moved to Dialog
-
-                        AndroidView(
-                            factory = { context ->
-                                WebView(context).apply {
-                                    layoutParams = ViewGroup.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                    settings.javaScriptEnabled = true
-                                    settings.domStorageEnabled = true
-                                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                    webViewClient = object : WebViewClient() {
-                                        override fun shouldOverrideUrlLoading(
-                                            view: WebView?,
-                                            request: WebResourceRequest?
-                                        ): Boolean {
-                                            val url = request?.url?.toString()
-                                            if (url != null) {
-                                                try {
-                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                    view?.context?.startActivity(intent)
-                                                    return true
-                                                } catch (e: Exception) {
-                                                    e.printStackTrace()
+                when {
+                    selectedTopic == AITopic.CLT_VIBE -> {
+                        CLTVibeView(viewModel, isEnglish)
+                    }
+                    displayMode == DisplayMode.SETTINGS -> {
+                        SettingsScreen(viewModel)
+                    }
+                    displayMode == DisplayMode.WEB && currentWebUrl != null -> {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            AndroidView(
+                                factory = { context ->
+                                    WebView(context).apply {
+                                        layoutParams = ViewGroup.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                        webViewClient = object : WebViewClient() {
+                                            override fun shouldOverrideUrlLoading(
+                                                view: WebView?,
+                                                request: WebResourceRequest?
+                                            ): Boolean {
+                                                val url = request?.url?.toString()
+                                                if (url != null) {
+                                                    try {
+                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        view?.context?.startActivity(intent)
+                                                        return true
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
                                                 }
+                                                return false
                                             }
-                                            return false
+                                        }
+                                        loadUrl(currentWebUrl!!)
+                                    }
+                                },
+                                update = { view ->
+                                    val url = currentWebUrl
+                                    if (url != null && view.url != url) {
+                                        view.loadUrl(url)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            )
+                        }
+                    }
+                    else -> {
+                        // Regular Chat View
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFFF2F2F7))
+                        ) {
+                            Text(
+                                text = if (isEnglish) "AI Chat" else "AI 对话",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                            
+                            Box(modifier = Modifier.weight(1f)) {
+                                MessageList(messages = messages, selectedTopic = selectedTopic)
+                            }
+                            
+                            if (isRecording) {
+                                Surface(
+                                    color = PrimaryPurple.copy(alpha = 0.1f),
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(16.dp)
+                                    ) {
+                                        Text(if (isEnglish) "Listening..." else "正在聆听...", color = PrimaryPurple, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(8.dp))
+                                        Button(
+                                            onClick = { viewModel.stopRecordingAndSend() },
+                                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
+                                            shape = RoundedCornerShape(24.dp),
+                                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                                        ) {
+                                            Icon(Icons.Default.Send, contentDescription = null)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(if (isEnglish) "Send" else "发送")
                                         }
                                     }
-                                    loadUrl(currentWebUrl!!)
                                 }
-                            },
-                            update = { view ->
-                                val url = currentWebUrl
-                                if (url != null && view.url != url) {
-                                    view.loadUrl(url)
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        )
-                    }
-                } else {
-                    // Chat View
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFFF2F2F7)) // System Grouped Background
-                    ) {
-                        Text(
-                            if (isEnglish) "AI Chat" else "AI 对话",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                        
-                        Box(modifier = Modifier.weight(1f)) {
-                            MessageList(messages = messages, selectedTopic = selectedTopic)
-                        }
-                        
-                        // Recording Area (Visible when recording)
-                        if (isRecording) {
-                           Surface(
-                               color = PrimaryPurple.copy(alpha = 0.1f),
-                               modifier = Modifier.fillMaxWidth().padding(8.dp),
-                               shape = RoundedCornerShape(16.dp)
-                           ) {
-                               Column(
-                                   horizontalAlignment = Alignment.CenterHorizontally,
-                                   modifier = Modifier.padding(16.dp)
-                               ) {
-                                   Text(if (isEnglish) "Listening..." else "正在聆听...", color = PrimaryPurple, fontWeight = FontWeight.Bold)
-                                   Spacer(Modifier.height(8.dp))
-                                   Button(
-                                       onClick = { viewModel.stopRecordingAndSend() },
-                                       colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-                                       shape = RoundedCornerShape(24.dp),
-                                       modifier = Modifier.fillMaxWidth().height(48.dp)
-                                   ) {
-                                       Icon(Icons.Default.Send, contentDescription = null)
-                                       Spacer(Modifier.width(8.dp))
-                                       Text(if (isEnglish) "Send" else "发送")
-                                   }
-                               }
-                           }
+                            }
                         }
                     }
                 }
@@ -834,7 +838,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             // Bottom Buttons Row Removed
 
             // Text Input Fallback Area
-            if (displayMode == DisplayMode.CHAT) {
+            if (displayMode == DisplayMode.CHAT || selectedTopic == AITopic.CLT_VIBE) {
                 TextInputArea(
                     onSend = { viewModel.sendMessage(it) },
                     placeholder = if (isEnglish) "Type a question..." else "输入问题..."
@@ -1033,6 +1037,7 @@ fun TopicButton(
             "directions car" -> Icons.Default.DirectionsCar
             "bus.doubledecker" -> Icons.Default.DirectionsBus
             "graduationcap" -> Icons.Default.School
+            "crown.fill" -> Icons.Default.AutoAwesome
             else -> Icons.Default.Dashboard
         }
     } else {
@@ -1045,6 +1050,7 @@ fun TopicButton(
             AITopic.LIFE -> Icons.Default.Favorite
             AITopic.FINANCE_NEWS -> Icons.Default.AttachMoney
             AITopic.MISC -> Icons.Default.Dashboard
+            AITopic.CLT_VIBE -> Icons.Default.AutoAwesome
         }
     }
     

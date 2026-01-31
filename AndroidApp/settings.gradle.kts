@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CLTDIY"
+rootProject.name = "QCAI"
 include(":app")
