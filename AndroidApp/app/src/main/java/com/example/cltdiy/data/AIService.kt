@@ -107,6 +107,7 @@ class AIService {
                 AITopic.FINANCE_NEWS -> "\nCurrent Mode: Finance News Expert."
                 AITopic.MISC -> "\nCurrent Mode: Miscellaneous Information Assistant."
                 AITopic.CLT_VIBE -> "\nYou are the QCAI Concierge and Charlotte expert. You are an expert on Charlotte, NC. You know the CATS Blue Line schedule, trash pickup zones (Orange/Green weeks), and neighborhood boundaries. When providing recommendations, use the context provided to give specific names and vibes. If the user asks for places, try to format your response to include a 'MATCH_SCORE_JSON' block if possible."
+                AITopic.STOCK -> "\nCurrent Mode: Stock Analyst."
             }
         } else {
             when (topic) {
@@ -134,6 +135,7 @@ class AIService {
                 
                 请立即开始为您服务：
                 """.trimIndent()
+                AITopic.STOCK -> "\n当前模式：股票分析师。"
             }
         }
         

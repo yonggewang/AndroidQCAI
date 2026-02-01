@@ -184,6 +184,34 @@ class TTSManager(
             }
             else -> {
                 Log.d(TAG, "Language set to: $locale")
+                
+                // Attempt to find a high-quality voice for this locale
+                try {
+                    val voices = tts?.voices
+                    if (voices != null) {
+                        // Priority 1: "Network" voices (usually higher quality cloud-based)
+                        // Priority 2: Voices with "high" or "enhanced" in the name
+                        val bestVoice = voices
+                            .filter { it.locale == locale }
+                            .sortedByDescending { voice ->
+                                var score = 0
+                                if (voice.isNetworkConnectionRequired) score += 2
+                                if (voice.name.contains("high", ignoreCase = true)) score += 1
+                                if (voice.name.contains("enhanced", ignoreCase = true)) score += 1
+                                score
+                            }
+                            .firstOrNull()
+
+                        if (bestVoice != null) {
+                            tts?.voice = bestVoice
+                            Log.d(TAG, "✅ Selected high-quality voice: ${bestVoice.name}")
+                        } else {
+                            Log.d(TAG, "No specific high-quality voice found, using default for $locale")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to set improved voice: ${e.message}")
+                }
             }
         }
     }

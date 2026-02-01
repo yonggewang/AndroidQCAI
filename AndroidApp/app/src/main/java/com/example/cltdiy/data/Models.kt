@@ -19,7 +19,8 @@ enum class AITopic(val chineseName: String, val englishName: String, val id: Str
     REAL_ESTATE("房产助手", "Real Estate Assistant", "realEstate"),
     LIFE("本地生活", "Local Life", "life"),
     MISC("杂项", "Misc", "misc"),
-    CLT_VIBE("夏洛特 Vibe", "CLT Vibe", "cltVibe")
+    CLT_VIBE("夏洛特 Vibe", "CLT Vibe", "cltVibe"),
+    STOCK("AI 股市透视", "AI Stock Analysis", "stock")
 }
 
 data class Recommendation(

@@ -38,7 +38,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
 
-    private val _appLanguage = MutableStateFlow(AppLanguage.CHINESE)
+    private val _appLanguage = MutableStateFlow(AppLanguage.ENGLISH)
     val appLanguage = _appLanguage.asStateFlow()
 
     private val _selectedEngine = MutableStateFlow(AIEngine.GEMINI)
@@ -510,6 +510,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
                 }
                 AITopic.CLT_VIBE -> {
+                    _displayMode.value = DisplayMode.CHAT
+                }
+                AITopic.STOCK -> {
                     _displayMode.value = DisplayMode.CHAT
                 }
 

@@ -58,7 +58,7 @@ class TopMenuManager {
         var topicIndex = 0
         for (line in lines) {
             try {
-                if (topicIndex >= 7) break // Only take first 7 from file
+                if (topicIndex >= 6) break // Only take first 6 from file
                 
                 val trimmedLine = line.trim()
                 if (trimmedLine.isEmpty()) continue
@@ -88,6 +88,16 @@ class TopMenuManager {
                 e.printStackTrace()
             }
         }
+        
+        // Add Stock item as 7th
+        items.add(TopMenuItem(
+            icon = "chart.xyaxis.line", 
+            englishName = "AI Stock Insight",
+            chineseName = "AI 股市透视",
+            chineseUrl = "",
+            englishUrl = "",
+            topic = AITopic.STOCK
+        ))
         
         // Always add CLT Vibe as the 8th item
         items.add(TopMenuItem(

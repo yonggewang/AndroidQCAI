@@ -739,6 +739,9 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     selectedTopic == AITopic.CLT_VIBE -> {
                         CLTVibeView(viewModel, isEnglish)
                     }
+                    selectedTopic == AITopic.STOCK -> {
+                        StockScreen(onOpenSettings = { viewModel.openAPIKeySetup() })
+                    }
                     displayMode == DisplayMode.SETTINGS -> {
                         SettingsScreen(viewModel)
                     }
@@ -1051,6 +1054,7 @@ fun TopicButton(
             AITopic.FINANCE_NEWS -> Icons.Default.AttachMoney
             AITopic.MISC -> Icons.Default.Dashboard
             AITopic.CLT_VIBE -> Icons.Default.AutoAwesome
+            AITopic.STOCK -> Icons.Default.ShowChart
         }
     }
     
@@ -1300,6 +1304,19 @@ fun APIKeySetupDialog(onDismiss: () -> Unit, onSave: () -> Unit) {
                         )
                         Spacer(Modifier.height(4.dp))
                     }
+                    
+                    Spacer(Modifier.height(8.dp))
+                    val noteText = if (isEnglish) 
+                        "Note: Using free tier API Keys from OpenAI and Gemini should be sufficient for the daily use of this app for most users."
+                    else 
+                        "注意：使用 OpenAI 和 Gemini 的免费层级 API Key 通常足以满足大多数用户的日常使用需求。"
+                        
+                    Text(
+                        text = noteText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PrimaryPurple,
+                        fontWeight = FontWeight.Medium
+                    )
                     
                     Spacer(Modifier.height(16.dp))
                     

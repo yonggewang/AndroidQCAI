@@ -32,11 +32,9 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
     val vibeHistory by viewModel.vibeHistory.collectAsState()
     val messages by viewModel.messages.collectAsState()
     var energyLevel by remember { mutableStateOf(50f) }
-    var userAddress by remember { mutableStateOf("") }
-    
+
     val lastAIMessage = messages.lastOrNull { !it.isUser && !it.isHidden }
-    
-    val displayAddress = if (userAddress.isNotBlank()) userAddress else "500 S Tryon St"
+
 
     val filterChips = listOf(
         "Fast Wi-Fi", "Quiet for Work", "Scenic View", "Pet Friendly", 
@@ -51,19 +49,19 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
 
     val sampleQuestions = if (isEnglish) {
         listOf(
-            "Find a quiet bagel store with WiFi in University City.",
-            "Should I put my recycling bin out this week at $displayAddress?",
-            "Show me a scenic park in South End for a walk.",
-            "When is the next trash pickup for $displayAddress?",
-            "Find the nearest public WiFi location in NoDa."
+            "Find a cozy coffee shop in South End good for remote work.",
+            "Where is a scenic rooftop bar Uptown that isn't too loud?",
+            "Best vintage clothing store in Plaza Midwood.",
+            "Where can I find live jazz music tonight?",
+            "We did a great job today. We want to go out and celebrate, where should we go?"
         )
     } else {
         listOf(
-            "在大学城（University City）找一个有 WiFi 的安静贝果店。",
-            "查询 $displayAddress 这周是否需要推回收到门口？",
-            "帮我找一个位于 South End 适合散步的风景优美的公园。",
-            "查询 $displayAddress 的下一次垃圾清运时间。",
-            "查找 NoDa 附近最近的公共 WiFi 地点。"
+            "在 South End 找一家适合远程办公的舒适咖啡馆。",
+            "Uptown 有哪些风景好但不太吵的屋顶酒吧？",
+            "Plaza Midwood 最好的复古服装店是哪家？",
+            "今晚哪里有现场爵士乐演出？",
+            "我们今天工作很出色，想去庆祝一下，有什么推荐的地方？"
         )
     }
 
@@ -128,64 +126,13 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
             }
         }
 
-        // Schedule Card
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (isEnglish) "Check Your Schedule" else "查询清运时间",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
-                    )
-                }
-                
-                OutlinedTextField(
-                    value = userAddress,
-                    onValueChange = { userAddress = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { 
-                        Text(if (isEnglish) "e.g. 500 S Tryon St" else "例如：500 S Tryon St") 
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    trailingIcon = {
-                        if (userAddress.isNotBlank()) {
-                            IconButton(onClick = {
-                                val q = if (isEnglish) "When is my trash and recycling pickup for $userAddress?" else "查询 $userAddress 的垃圾和回收时间？"
-                                viewModel.sendMessage(q)
-                            }) {
-                                Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF3F51B5))
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF3F51B5),
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
-                    )
-                )
-                
-                Text(
-                    text = if (isEnglish) "💡 Hint: Your address updates the questions below." else "💡 提示：输入地址后，下方问题将自动关联。",
-                    fontSize = 11.sp,
-                    color = Color.Gray
-                )
-            }
-        }
 
-        // Vibe Selector
+
+        // Vibe Check Selector (Compact)
         item {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
                     text = if (isEnglish) "Vibe Check" else "氛围筛选",
@@ -194,34 +141,45 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
                 
-                Column(
+                // Compact Slider Row
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(energyColor.copy(alpha = 0.08f))
-                        .padding(20.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFF0F0F0)) // Light gray background
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (isEnglish) "Energy Level" else "活跃程度", fontSize = 14.sp, color = Color.Gray)
-                        Text(energyLevelLabel, fontWeight = FontWeight.Bold, color = energyColor)
-                    }
+                    Text(
+                        text = if (isEnglish) "Energy:" else "活跃度:",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                    
+                    Text(
+                        text = energyLevelLabel,
+                        fontWeight = FontWeight.Bold,
+                        color = energyColor,
+                        fontSize = 14.sp,
+                        modifier = Modifier.width(70.dp)
+                    )
+                    
                     Slider(
                         value = energyLevel,
                         onValueChange = { energyLevel = it },
                         valueRange = 0f..100f,
+                        modifier = Modifier.weight(1f),
                         colors = SliderDefaults.colors(
                             thumbColor = energyColor,
                             activeTrackColor = energyColor
                         )
                     )
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (isEnglish) "Chill" else "宁静", fontSize = 11.sp, color = Color.Gray)
-                        Text(if (isEnglish) "Lively" else "热闹", fontSize = 11.sp, color = Color.Gray)
-                    }
                 }
 
+                // Chips
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp)
                 ) {
                     items(filterChips) { chip ->
@@ -237,8 +195,8 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
                         ) {
                             Text(
                                 text = chip,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                fontSize = 13.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF3F51B5)
                             )
