@@ -1,4 +1,4 @@
-package com.example.cltdiy.utils
+package com.quantumproperty.qcai.utils
 
 import android.content.Context
 import android.media.AudioManager
@@ -40,7 +40,9 @@ class TTSManager(
                 when (status) {
                     TextToSpeech.SUCCESS -> {
                         Log.d(TAG, "TTS initialized successfully")
-                        val result = tts?.setLanguage(Locale.CHINESE)
+                        // Default to US English instead of Chinese to avoid failure on standard emulators/phones
+                        // The ViewModel will override this with the correct user preference immediately after.
+                        val result = tts?.setLanguage(Locale.US)
                         
                         when (result) {
                             TextToSpeech.LANG_MISSING_DATA -> {

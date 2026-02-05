@@ -1,4 +1,4 @@
-package com.example.cltdiy.ui.screen
+package com.quantumproperty.qcai.ui.screen
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,9 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.example.cltdiy.data.RentalModel
-import com.example.cltdiy.ui.viewmodel.RentalsViewModel
-import com.example.cltdiy.data.UserProfile
+import com.quantumproperty.qcai.data.RentalModel
+import com.quantumproperty.qcai.ui.viewmodel.RentalsViewModel
+import com.quantumproperty.qcai.data.UserProfile
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)

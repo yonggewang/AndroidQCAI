@@ -1,4 +1,4 @@
-package com.example.cltdiy.data
+package com.quantumproperty.qcai.data
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DatabaseReference

@@ -1,4 +1,4 @@
-package com.example.cltdiy.ui.screen
+package com.quantumproperty.qcai.ui.screen
 
 import android.graphics.Bitmap
 import android.view.ViewGroup
@@ -18,6 +18,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,15 +46,16 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.cltdiy.data.AIEngine
-import com.example.cltdiy.data.AITopic
-import com.example.cltdiy.data.AppLanguage
-import com.example.cltdiy.data.ChatMessage
-import com.example.cltdiy.data.PreferenceManager
-import com.example.cltdiy.ui.viewmodel.DisplayMode
-import com.example.cltdiy.ui.viewmodel.TeacherViewModel
+import com.quantumproperty.qcai.data.AIEngine
+import com.quantumproperty.qcai.data.AITopic
+import com.quantumproperty.qcai.data.AppLanguage
+import com.quantumproperty.qcai.data.ChatMessage
+import com.quantumproperty.qcai.data.PreferenceManager
+import com.quantumproperty.qcai.ui.viewmodel.DisplayMode
+import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
 
 // Premium Color Palette
 val PrimaryPurple = Color(0xFF6200EE)
@@ -330,7 +334,10 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    // Fix for "Strange Look": Push content down below status bar/camera cutout
+                    .statusBarsPadding() 
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .heightIn(min = 60.dp), // Ensure minimal touch target height
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val isLoggedIn by viewModel.isLoggedIn.collectAsState()
@@ -367,7 +374,11 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     modifier = Modifier
                         .height(32.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .clickable { viewModel.startSequentialListen() }
+                        .clickable { 
+                            // Immediate visual feedback for "Nothing happens" issue
+                            Toast.makeText(context, if (isEnglish) "Starting audio..." else "开始播放...", Toast.LENGTH_SHORT).show()
+                            viewModel.startSequentialListen() 
+                        }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp),
@@ -1021,7 +1032,7 @@ fun TextInputArea(onSend: (String) -> Unit, placeholder: String) {
 @Composable
 fun TopicButton(
     topic: AITopic, 
-    dynamicItem: com.example.cltdiy.data.TopMenuItem? = null,
+    dynamicItem: com.quantumproperty.qcai.data.TopMenuItem? = null,
     isSelected: Boolean, 
     isEnglish: Boolean,
     onClick: () -> Unit, 
@@ -1638,172 +1649,214 @@ fun RegisterDialog(
         )
     }
 
-    AlertDialog(
+    // Full Screen Dialog for Registration
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEnglish) "Register" else "注册") },
-        text = {
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
             Column(
-                modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding() 
+                    .imePadding()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                OutlinedTextField(
-                    value = email, 
-                    onValueChange = { email = it },
-                    label = { Text("Email (Verify Link will be sent)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(if (isEnglish) "Password" else "密码") },
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                )
-                OutlinedTextField(
-                    value = fullName,
-                    onValueChange = { fullName = it },
-                    label = { Text(if (isEnglish) "Full Name" else "全名") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text(if (isEnglish) "Username" else "用户名") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text(if (isEnglish) "Phone Number" else "电话号码") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Terms and EULA Agreement
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = PrimaryPurple.copy(alpha = 0.05f)
-                    ),
-                    shape = RoundedCornerShape(8.dp)
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { agreedToTerms = !agreedToTerms }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Text(
+                        text = if (isEnglish) "Register" else "注册",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                // Scrollable Form
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = email, 
+                        onValueChange = { email = it },
+                        label = { Text("Email (Verify Link will be sent)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email)
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text(if (isEnglish) "Password" else "密码") },
+                        modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
+                    )
+                    OutlinedTextField(
+                        value = fullName,
+                        onValueChange = { fullName = it },
+                        label = { Text(if (isEnglish) "Full Name" else "全名") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text(if (isEnglish) "Username" else "用户名") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text(if (isEnglish) "Phone Number" else "电话号码") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone)
+                    )
+                    
+                    // Terms and EULA Agreement
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = PrimaryPurple.copy(alpha = 0.05f)
+                        ),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Checkbox(
-                            checked = agreedToTerms,
-                            onCheckedChange = { agreedToTerms = it },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = PrimaryPurple
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { agreedToTerms = !agreedToTerms }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = agreedToTerms,
+                                onCheckedChange = { agreedToTerms = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = PrimaryPurple
+                                )
                             )
-                        )
-                        
-                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                            androidx.compose.ui.text.AnnotatedString.Builder().apply {
-                                if (isEnglish) {
-                                    append("I agree to the ")
-                                } else {
-                                    append("我同意 ")
+                            
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                androidx.compose.ui.text.AnnotatedString.Builder().apply {
+                                    if (isEnglish) {
+                                        append("I agree to the ")
+                                    } else {
+                                        append("我同意 ")
+                                    }
                                 }
-                            }
-                            
-                            Text(
-                                text = if (isEnglish) 
-                                    "I agree to the Terms of Service and EULA" 
-                                else 
-                                    "我同意服务条款和最终用户许可协议",
-                                fontSize = 13.sp,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            
-                            Row(
-                                modifier = Modifier.padding(top = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Text(
-                                    text = if (isEnglish) "Terms of Service" else "服务条款",
-                                    color = PrimaryPurple,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.clickable {
-                                        uriHandler.openUri("https://cyberpandaapp.com/terms")
-                                    },
-                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                )
                                 
                                 Text(
-                                    text = "EULA",
-                                    color = PrimaryPurple,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.clickable {
-                                        showEULA = true
-                                    },
-                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                    text = if (isEnglish) 
+                                        "I agree to the Terms of Service and EULA" 
+                                    else 
+                                        "我同意服务条款和最终用户许可协议",
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                                 
-                                Text(
-                                    text = if (isEnglish) "Privacy Policy" else "隐私政策",
-                                    color = PrimaryPurple,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.clickable {
-                                        uriHandler.openUri("https://cyberpandaapp.com/privacy")
-                                    },
-                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                )
-                            }
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            // Read Full EULA Button
-                            TextButton(
-                                onClick = { showEULA = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    Icons.Default.MenuBook,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = PrimaryPurple
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isEnglish) "Read Full EULA & Policies" else "阅读完整的服务条款",
-                                    fontSize = 11.sp,
-                                    color = PrimaryPurple
-                                )
+                                Row(
+                                    modifier = Modifier.padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(
+                                        text = if (isEnglish) "Terms of Service" else "服务条款",
+                                        color = PrimaryPurple,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.clickable {
+                                            uriHandler.openUri("https://cyberpandaapp.com/terms")
+                                        },
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                    )
+                                    
+                                    Text(
+                                        text = "EULA",
+                                        color = PrimaryPurple,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.clickable {
+                                            showEULA = true
+                                        },
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                    )
+                                    
+                                    Text(
+                                        text = if (isEnglish) "Privacy Policy" else "隐私政策",
+                                        color = PrimaryPurple,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.clickable {
+                                            uriHandler.openUri("https://cyberpandaapp.com/privacy")
+                                        },
+                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // Read Full EULA Button
+                                TextButton(
+                                    onClick = { showEULA = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        Icons.Default.MenuBook,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = PrimaryPurple
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (isEnglish) "Read Full EULA & Policies" else "阅读完整的服务条款",
+                                        fontSize = 11.sp,
+                                        color = PrimaryPurple
+                                    )
+                                }
                             }
                         }
                     }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Button(
+                        onClick = { onRegister(email, password, fullName, username, phone) },
+                        enabled = email.isNotBlank() && password.isNotBlank() && username.isNotBlank() && agreedToTerms,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(if (isEnglish) "Register" else "注册", fontSize = 16.sp)
+                    }
+
+                    TextButton(
+                        onClick = {
+                            onDismiss()
+                            onLoginClick()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isEnglish) "Already have account? Login" else "已有账号？登录")
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                TextButton(onClick = {
-                    onDismiss()
-                    onLoginClick()
-                }) {
-                    Text(if (isEnglish) "Already have account? Login" else "已有账号？登录")
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onRegister(email, password, fullName, username, phone) },
-                enabled = email.isNotBlank() && password.isNotBlank() && username.isNotBlank() && agreedToTerms
-            ) {
-                Text(if (isEnglish) "Register" else "注册")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(if (isEnglish) "Cancel" else "取消")
             }
         }
-    )
+    }
 }
 
 

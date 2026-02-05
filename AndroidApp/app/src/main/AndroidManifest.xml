@@ -28,7 +28,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
-            android:name="com.example.cltdiy.MainActivity"
+            android:name="com.quantumproperty.qcai.MainActivity"
             android:exported="true"
             android:theme="@style/Theme.QCAI">
             <intent-filter>

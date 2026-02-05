@@ -1,23 +1,23 @@
-package com.example.cltdiy.ui.viewmodel
+package com.quantumproperty.qcai.ui.viewmodel
 
 import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.cltdiy.data.AIEngine
-import com.example.cltdiy.data.AIService
-import com.example.cltdiy.data.AITopic
-import com.example.cltdiy.data.AppLanguage
-import com.example.cltdiy.data.ChatMessage
-import com.example.cltdiy.data.HotToolItem
-import com.example.cltdiy.data.TopMenuItem
-import com.example.cltdiy.data.Recommendation
-import com.example.cltdiy.data.PreferenceManager
+import com.quantumproperty.qcai.data.AIEngine
+import com.quantumproperty.qcai.data.AIService
+import com.quantumproperty.qcai.data.AITopic
+import com.quantumproperty.qcai.data.AppLanguage
+import com.quantumproperty.qcai.data.ChatMessage
+import com.quantumproperty.qcai.data.HotToolItem
+import com.quantumproperty.qcai.data.TopMenuItem
+import com.quantumproperty.qcai.data.Recommendation
+import com.quantumproperty.qcai.data.PreferenceManager
 import kotlinx.coroutines.Dispatchers
-import com.example.cltdiy.utils.SpeechManager
-import com.example.cltdiy.utils.TTSManager
-import com.example.cltdiy.data.UserManager
-import com.example.cltdiy.data.UserProfile
+import com.quantumproperty.qcai.utils.SpeechManager
+import com.quantumproperty.qcai.utils.TTSManager
+import com.quantumproperty.qcai.data.UserManager
+import com.quantumproperty.qcai.data.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -181,6 +181,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                onInitSuccess = {
                    // TTS initialized successfully
                    android.util.Log.d("TeacherViewModel", "✅ TTS ready for use")
+                   // Set correct language immediately
+                   val locale = if (_appLanguage.value == AppLanguage.CHINESE) java.util.Locale.CHINESE else java.util.Locale.US
+                   ttsManager?.setLanguage(locale)
                },
                onInitFailure = { error ->
                    // Show user-friendly error message
@@ -409,7 +412,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                  _showLoginDialog.value = false
                  refreshHotToolList() // Refresh tools for the new user
              } else {
-                 showError(result.exceptionOrNull()?.message ?: "Login Failed")
+                 val error = result.exceptionOrNull()
+                 error?.printStackTrace()
+                 val msg = error?.message ?: "Login Failed"
+                 
+                 if (msg.contains("CONFIGURATION_NOT_FOUND")) {
+                     showError("Config Error: Google Services missing. Please check your installation.")
+                 } else {
+                     showError(msg)
+                 }
              }
         }
     }
@@ -450,7 +461,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         userManager?.logout()
     }
 
-    private val topMenuManager by lazy { com.example.cltdiy.data.TopMenuManager() }
+    private val topMenuManager by lazy { com.quantumproperty.qcai.data.TopMenuManager() }
 
     fun fetchTopMenu() {
         viewModelScope.launch {
@@ -596,43 +607,47 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private var currentSequenceIndex = 0
 
     fun startSequentialListen() {
-    // Check if TTS is ready
-    if (ttsManager?.isReady() != true) {
-        val isChinese = _appLanguage.value == AppLanguage.CHINESE
-        val message = if (isChinese) {
-            "语音播报服务不可用\n\n请在真机上测试此功能，或确保已安装 Google TTS。"
-        } else {
-            "Text-to-Speech service is unavailable\n\nPlease test this feature on a real device, or ensure Google TTS is installed."
+        // Check if TTS is ready
+        if (ttsManager?.isReady() != true) {
+            val isChinese = _appLanguage.value == AppLanguage.CHINESE
+            val message = if (isChinese) {
+                "语音播报服务不可用\n\n请在真机上测试此功能，或确保已安装 Google TTS。"
+            } else {
+                "Text-to-Speech service is unavailable\n\nPlease test this feature on a real device, or ensure Google TTS is installed."
+            }
+            showError(message)
+            return
         }
-        showError(message)
-        return
-    }
-    
-    isSequentialReading = true
-    currentSequenceIndex = 0
-    
-    // Listen for specific "DONE_TOPIC" event only
-    ttsManager?.onSpeechCompleted = {
-        if (isSequentialReading) {
-             // We don't distinguish ID here in the callback var, but we assume
-             // if onDone fires and we are sequential, check if we need to proceed.
-             // Ideally we should check the utteranceID from the callback, 
-             // but existing TTSManager doesn't pass it back in the lambda.
-             // Assuming the listener fires for the last item in the queue.
-             
-            viewModelScope.launch {
-                currentSequenceIndex++
-                if (currentSequenceIndex < sequentialTopics.size) {
-                     readCurrentSequenceStep()
-                } else {
-                    isSequentialReading = false
+
+        // Give immediate feedback
+        val loadingMsg = if (_appLanguage.value == AppLanguage.CHINESE) "正在获取最新新闻..." else "Checking for latest updates..."
+        ttsManager?.speak(loadingMsg, null, android.speech.tts.TextToSpeech.QUEUE_FLUSH)
+        
+        isSequentialReading = true
+        currentSequenceIndex = 0
+        
+        // Listen for specific "DONE_TOPIC" event only
+        ttsManager?.onSpeechCompleted = {
+            if (isSequentialReading) {
+                 // We don't distinguish ID here in the callback var, but we assume
+                 // if onDone fires and we are sequential, check if we need to proceed.
+                 // Ideally we should check the utteranceID from the callback, 
+                 // but existing TTSManager doesn't pass it back in the lambda.
+                 // Assuming the listener fires for the last item in the queue.
+                 
+                viewModelScope.launch {
+                    currentSequenceIndex++
+                    if (currentSequenceIndex < sequentialTopics.size) {
+                         readCurrentSequenceStep()
+                    } else {
+                        isSequentialReading = false
+                    }
                 }
             }
         }
+        
+        readCurrentSequenceStep()
     }
-    
-    readCurrentSequenceStep()
-}
     
     fun stopSequentialListen() {
          isSequentialReading = false
@@ -660,7 +675,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _isLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val doc = Jsoup.connect(url).timeout(10000).get()
+                // Add User-Agent to avoid being blocked
+                val doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
+                    .timeout(10000)
+                    .get()
                 
                 
                 // Smart parsing:
@@ -691,8 +710,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 
-                // 1. Speak Intro (Flush)
-                ttsManager?.speak(intro, null, android.speech.tts.TextToSpeech.QUEUE_FLUSH)
+                // 1. Speak Intro (Add) - We used QUEUE_FLUSH for loading message, so here we ADD
+                ttsManager?.speak(intro, null, android.speech.tts.TextToSpeech.QUEUE_ADD)
                 ttsManager?.playSilence(600, android.speech.tts.TextToSpeech.QUEUE_ADD, null)
                 
                 // 2. Speak Items (Add)
@@ -718,8 +737,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 e.printStackTrace()
                 // If error, try skip to next? 
                 launch {
-                    val errorMsg = if (currentSequenceIndex == 0) "Failed to load news" else null
-                    if (errorMsg != null) showError(errorMsg)
+                    val errorMsg = "Error loading news: ${e.message}"
+                    // Always show error if it's the first one, or log it
+                    if (currentSequenceIndex == 0) showError(errorMsg)
 
                     // Short delay then next
                     kotlinx.coroutines.delay(1000)
@@ -753,7 +773,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         viewModelScope.launch {
             // Fetch official GIS data first
-            val gisData = com.example.cltdiy.data.PropertyDataService().fetchPropertyData(address)
+            val gisData = com.quantumproperty.qcai.data.PropertyDataService().fetchPropertyData(address)
             
             val prompt = if (_appLanguage.value == AppLanguage.CHINESE) 
                 """
@@ -901,7 +921,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _apiKeySetupReason.value = null
     }
 
-    private val hotListManager by lazy { com.example.cltdiy.data.HotListManager() }
+    private val hotListManager by lazy { com.quantumproperty.qcai.data.HotListManager() }
 
     fun refreshHotToolList() {
         viewModelScope.launch(Dispatchers.IO) {

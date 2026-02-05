@@ -1,12 +1,12 @@
-package com.example.cltdiy.ui.viewmodel
+package com.quantumproperty.qcai.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.cltdiy.data.CommunityAPIService
-import com.example.cltdiy.data.EventModel
-import com.example.cltdiy.data.MarketplaceItemModel
-import com.example.cltdiy.data.RentalModel
-import com.example.cltdiy.data.UserProfile
+import com.quantumproperty.qcai.data.CommunityAPIService
+import com.quantumproperty.qcai.data.EventModel
+import com.quantumproperty.qcai.data.MarketplaceItemModel
+import com.quantumproperty.qcai.data.RentalModel
+import com.quantumproperty.qcai.data.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

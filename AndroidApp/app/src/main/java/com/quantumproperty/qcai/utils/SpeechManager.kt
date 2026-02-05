@@ -1,4 +1,4 @@
-package com.example.cltdiy.utils
+package com.quantumproperty.qcai.utils
 
 import android.content.Context
 import android.content.Intent

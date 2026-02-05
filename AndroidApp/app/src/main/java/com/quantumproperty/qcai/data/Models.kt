@@ -1,4 +1,4 @@
-package com.example.cltdiy.data
+package com.quantumproperty.qcai.data
 
 enum class AppLanguage {
     CHINESE, ENGLISH

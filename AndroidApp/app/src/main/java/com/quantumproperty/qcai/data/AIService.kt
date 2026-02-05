@@ -1,4 +1,4 @@
-package com.example.cltdiy.data
+package com.quantumproperty.qcai.data
 
 import android.graphics.Bitmap
 import android.util.Base64

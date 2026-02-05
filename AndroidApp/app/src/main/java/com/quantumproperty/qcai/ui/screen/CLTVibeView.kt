@@ -1,4 +1,4 @@
-package com.example.cltdiy.ui.screen
+package com.quantumproperty.qcai.ui.screen
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -21,10 +21,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.cltdiy.data.Recommendation
-import com.example.cltdiy.ui.viewmodel.TeacherViewModel
-import com.example.cltdiy.data.ChatMessage
-import com.example.cltdiy.data.AITopic
+import com.quantumproperty.qcai.data.Recommendation
+import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
+import com.quantumproperty.qcai.data.ChatMessage
+import com.quantumproperty.qcai.data.AITopic
 
 @Composable
 fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {

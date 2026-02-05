@@ -1,13 +1,13 @@
-package com.example.cltdiy.ui.screen
+package com.quantumproperty.qcai.ui.screen
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,38 +19,37 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.example.cltdiy.data.EventModel
-import com.example.cltdiy.ui.viewmodel.EventsViewModel
-import com.example.cltdiy.data.UserProfile
+import com.quantumproperty.qcai.data.MarketplaceItemModel
+import com.quantumproperty.qcai.ui.viewmodel.MarketplaceViewModel
+import com.quantumproperty.qcai.data.UserProfile
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventsScreen(
+fun MarketplaceScreen(
     userProfile: UserProfile?,
     onBack: () -> Unit
 ) {
-    val viewModel: EventsViewModel = viewModel()
-    val events by viewModel.events.collectAsState()
+    val viewModel: MarketplaceViewModel = viewModel()
+    val items by viewModel.items.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     
     var showCreateDialog by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
-        viewModel.loadEvents()
+        viewModel.loadItems()
     }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Community Events") },
+                title = { Text("Marketplace") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
@@ -60,7 +59,7 @@ fun EventsScreen(
                     // Only show create button for verified members (trustLevel > 0)
                     if (userProfile != null && userProfile.vipLevel > 0) {
                         IconButton(onClick = { showCreateDialog = true }) {
-                            Icon(Icons.Default.Add, "Create Event")
+                            Icon(Icons.Default.Add, "Sell Item")
                         }
                     }
                 }
@@ -78,9 +77,9 @@ fun EventsScreen(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
-                events.isEmpty() -> {
+                items.isEmpty() -> {
                     Text(
-                        "No upcoming events.",
+                        "No items for sale.",
                         modifier = Modifier.align(Alignment.Center),
                         color = Color.Gray
                     )
@@ -91,11 +90,11 @@ fun EventsScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(events) { event ->
-                            EventCard(
-                                event = event,
+                        items(items) { item ->
+                            MarketplaceItemCard(
+                                item = item,
                                 userProfile = userProfile,
-                                onDelete = { viewModel.deleteEvent(event.id) }
+                                onDelete = { viewModel.deleteItem(item.id) }
                             )
                         }
                     }
@@ -118,12 +117,12 @@ fun EventsScreen(
         }
     }
     
-    // Create Event Dialog
+    // Create Item Dialog
     if (showCreateDialog) {
-        CreateEventDialog(
+        CreateMarketplaceItemDialog(
             onDismiss = { showCreateDialog = false },
-            onCreate = { title, description, date, location, imageFile ->
-                viewModel.createEvent(title, description, date, location, imageFile) {
+            onCreate = { title, description, price, condition, imageFile ->
+                viewModel.createItem(title, description, price, condition, imageFile) {
                     showCreateDialog = false
                 }
             }
@@ -132,8 +131,8 @@ fun EventsScreen(
 }
 
 @Composable
-fun EventCard(
-    event: EventModel,
+fun MarketplaceItemCard(
+    item: MarketplaceItemModel,
     userProfile: UserProfile?,
     onDelete: () -> Unit
 ) {
@@ -142,95 +141,115 @@ fun EventCard(
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(12.dp)
         ) {
-            // Image
-            event.imageUrl?.let { url ->
+            // Image Thumbnail
+            if (item.imageUrl != null) {
                 AsyncImage(
-                    model = url,
-                    contentDescription = "Event Image",
+                    model = item.imageUrl,
+                    contentDescription = "Item Image",
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
+                        .size(80.dp)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            
-            // Title
-            Text(
-                text = event.title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Description
-            Text(
-                text = event.description,
-                fontSize = 14.sp,
-                color = Color.Gray,
-                maxLines = 2
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Date and Location
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            } else {
+                Surface(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    color = Color.Gray.copy(alpha = 0.2f)
+                ) {
                     Icon(
-                        Icons.Default.DateRange,
-                        contentDescription = "Date",
-                        modifier = Modifier.size(16.dp),
+                        Icons.Default.ShoppingCart,
+                        contentDescription = "No Image",
+                        modifier = Modifier.padding(20.dp),
                         tint = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = event.eventDate,
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-                }
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.LocationOn,
-                        contentDescription = "Location",
-                        modifier = Modifier.size(16.dp),
-                        tint = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = event.location,
-                        fontSize = 12.sp,
-                        color = Color.Gray
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             
-            // Author and Delete Button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "Posted by: ${event.authorUsername}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                // Title & Description
+                Column {
+                    Text(
+                        text = item.title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = item.description,
+                        fontSize = 13.sp,
+                        color = Color.Gray,
+                        maxLines = 2
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // Condition Badge
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color.Gray.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = item.condition,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = "Seller: ${item.authorUsername}",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+            
+            // Price and Actions Column
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$${String.format("%.2f", item.price)}",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                    
+                    if (item.isSold) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red)
+                        ) {
+                            Text(
+                                text = "SOLD",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.Red,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 
                 // Delete button - only for owner or super user (Level 99)
                 if (userProfile != null && 
-                    (event.authorUsername == userProfile.username || userProfile.vipLevel == 99)) {
+                    (item.authorUsername == userProfile.username || userProfile.vipLevel == 99)) {
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,
@@ -246,15 +265,18 @@ fun EventCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateEventDialog(
+fun CreateMarketplaceItemDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, String, String, String, File?) -> Unit
+    onCreate: (String, String, Double, String, File?) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var eventDate by remember { mutableStateOf("") }
+    var price by remember { mutableStateOf("") }
+    var condition by remember { mutableStateOf("Used - Good") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
+    
+    val conditions = listOf("New", "Used - Like New", "Used - Good", "Used - Fair")
+    var expanded by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     
@@ -266,7 +288,7 @@ fun CreateEventDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Event") },
+        title = { Text("Sell Item") },
         text = {
             Column(
                 modifier = Modifier
@@ -304,19 +326,44 @@ fun CreateEventDialog(
                 )
                 
                 OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Location") },
-                    modifier = Modifier.fillMaxWidth()
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Price") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    prefix = { Text("$") }
                 )
                 
-                OutlinedTextField(
-                    value = eventDate,
-                    onValueChange = { eventDate = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
-                    placeholder = { Text("2024-01-31") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Condition Dropdown
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = !expanded }
+                ) {
+                    OutlinedTextField(
+                        value = condition,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Condition") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        conditions.forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item) },
+                                onClick = {
+                                    condition = item
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
                 
                 OutlinedTextField(
                     value = description,
@@ -363,11 +410,11 @@ fun CreateEventDialog(
         confirmButton = {
             TextButton(
                 onClick = {
+                    val priceValue = price.toDoubleOrNull() ?: 0.0
                     val imageFile = imageUri?.let { uri ->
-                        // Convert URI to File (simplified - in production use proper file handling)
                         try {
                             val inputStream = context.contentResolver.openInputStream(uri)
-                            val file = File(context.cacheDir, "event_${System.currentTimeMillis()}.jpg")
+                            val file = File(context.cacheDir, "marketplace_${System.currentTimeMillis()}.jpg")
                             file.outputStream().use { outputStream ->
                                 inputStream?.copyTo(outputStream)
                             }
@@ -376,11 +423,11 @@ fun CreateEventDialog(
                             null
                         }
                     }
-                    onCreate(title, description, eventDate, location, imageFile)
+                    onCreate(title, description, priceValue, condition, imageFile)
                 },
-                enabled = title.isNotEmpty() && location.isNotEmpty()
+                enabled = title.isNotEmpty() && price.isNotEmpty()
             ) {
-                Text("Post Event")
+                Text("Post Item")
             }
         },
         dismissButton = {

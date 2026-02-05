@@ -1,4 +1,4 @@
-package com.example.cltdiy.data
+package com.quantumproperty.qcai.data
 
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth

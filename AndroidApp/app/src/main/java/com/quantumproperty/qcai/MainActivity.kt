@@ -1,9 +1,9 @@
-package com.example.cltdiy
+package com.quantumproperty.qcai
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.example.cltdiy.ui.screen.TeacherScreen
+import com.quantumproperty.qcai.ui.screen.TeacherScreen
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 

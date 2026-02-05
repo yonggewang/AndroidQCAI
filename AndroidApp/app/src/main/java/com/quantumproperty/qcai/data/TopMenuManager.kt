@@ -1,4 +1,4 @@
-package com.example.cltdiy.data
+package com.quantumproperty.qcai.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
