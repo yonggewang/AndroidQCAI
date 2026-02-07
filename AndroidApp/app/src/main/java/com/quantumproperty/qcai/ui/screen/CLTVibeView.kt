@@ -1,6 +1,7 @@
 package com.quantumproperty.qcai.ui.screen
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -78,48 +79,159 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Hero Card
+        // Daily Briefing Card (City OS)
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color(0xFF6A1B9A), Color(0xFF4527A0))
-                            )
-                        )
-                        .padding(24.dp)
+            var dailyBrief by remember { mutableStateOf<com.quantumproperty.qcai.data.DailyBriefResponse?>(null) }
+            var isLoadingBrief by remember { mutableStateOf(true) }
+            var isExpanded by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                try {
+                    dailyBrief = com.quantumproperty.qcai.data.CityOSService.instance.fetchDailyBrief()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    isLoadingBrief = false
+                }
+            }
+
+            if (dailyBrief != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().animateContentSize(),
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier.size(52.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.padding(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF007AFF), Color(0xFF0055A0))
+                                )
                             )
+                            .padding(20.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Header
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (isEnglish) "Charlotte Today" else "今日夏洛特",
+                                    color = Color.White,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                dailyBrief?.weather?.let { w ->
+                                    Icon(
+                                        imageVector = Icons.Default.CloudQueue, // Simple cloud icon for now
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "${w.temp.toInt()}°",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Briefing Text
+                            Text(
+                                text = dailyBrief?.briefingText ?: "",
+                                color = Color.White.copy(alpha = 0.95f),
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                maxLines = if (isExpanded) Int.MAX_VALUE else 3,
+                                modifier = Modifier.clickable { isExpanded = !isExpanded }
+                            )
+
+                            if (!isExpanded) {
+                                Text(
+                                    text = if (isEnglish) "Tap to read more..." else "点击阅读更多...",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            // News Chips
+                            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(dailyBrief?.topNews ?: emptyList()) { news ->
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.clickable { 
+                                            uriHandler.openUri(news.url)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = news.headline,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                text = if (isEnglish) "Charlotte Concierge" else "夏洛特管家",
-                                color = Color.White,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.ExtraBold
+                    }
+                }
+            } else if (isLoadingBrief) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(150.dp)
+                        .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(20.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Color(0xFF007AFF))
+                }
+            } else {
+               // Fallback / Service Down
+               // Reuse the old Hero Card style as fallback if briefing fails?
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF6A1B9A), Color(0xFF4527A0))
+                                )
                             )
-                            Text(
-                                text = if (isEnglish) "Hyper-local vibes & schedules" else "深度本地探索与生活指南",
-                                color = Color.White.copy(alpha = 0.8f),
-                                fontSize = 13.sp
-                            )
+                            .padding(24.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.White.copy(alpha = 0.2f),
+                                modifier = Modifier.size(52.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.padding(14.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = if (isEnglish) "Charlotte Concierge" else "夏洛特管家",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = if (isEnglish) "Hyper-local vibes & schedules" else "深度本地探索与生活指南",
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    fontSize = 13.sp
+                                )
+                            }
                         }
                     }
                 }

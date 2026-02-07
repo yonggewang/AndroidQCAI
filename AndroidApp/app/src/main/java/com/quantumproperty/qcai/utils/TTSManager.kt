@@ -12,7 +12,7 @@ class TTSManager(
     private val onInitFailure: ((String) -> Unit)? = null
 ) {
     private var tts: TextToSpeech? = null
-    var onSpeechCompleted: (() -> Unit)? = null
+    var onSpeechCompleted: ((String?) -> Unit)? = null
     
     private var isInitialized = false
     private val TAG = "TTSManager"
@@ -70,6 +70,8 @@ class TTSManager(
                                             .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
                                             .build()
                                         
+                                        engine.setAudioAttributes(audioAttributes)
+                                        
                                         // This ensures TTS uses the media stream
                                         Log.d(TAG, "Audio attributes configured for TTS")
                                     } catch (e: Exception) {
@@ -111,7 +113,7 @@ class TTSManager(
 
             override fun onDone(utteranceId: String?) {
                 Log.d(TAG, "✅ Speech completed: $utteranceId")
-                onSpeechCompleted?.invoke()
+                onSpeechCompleted?.invoke(utteranceId)
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
@@ -175,16 +177,18 @@ class TTSManager(
         Log.d(TAG, "Updated TTS config - Rate: $rate, Pitch: $pitch")
     }
 
-    fun setLanguage(locale: Locale) {
+    fun setLanguage(locale: Locale): Boolean {
         val result = tts?.setLanguage(locale)
-        when (result) {
+        return when (result) {
             TextToSpeech.LANG_MISSING_DATA -> {
                 Log.e(TAG, "Language data missing for: $locale")
+                false
             }
             TextToSpeech.LANG_NOT_SUPPORTED -> {
                 Log.e(TAG, "Language not supported: $locale")
+                false
             }
-            else -> {
+            TextToSpeech.LANG_AVAILABLE, TextToSpeech.LANG_COUNTRY_AVAILABLE, TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
                 Log.d(TAG, "Language set to: $locale")
                 
                 // Attempt to find a high-quality voice for this locale
@@ -214,6 +218,12 @@ class TTSManager(
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to set improved voice: ${e.message}")
                 }
+                true
+            }
+            else -> {
+                 Log.w(TAG, "Language set returned unknown result: $result for $locale")
+                 // Assume success if positive (TextToSpeech constants are >= 0 for success usually, but let's be safe. data missing is -1, not supported is -2)
+                 result != null && result >= 0
             }
         }
     }

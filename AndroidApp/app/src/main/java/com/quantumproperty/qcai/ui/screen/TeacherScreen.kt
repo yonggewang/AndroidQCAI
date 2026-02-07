@@ -95,6 +95,8 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             viewModel.showError(errorMsg)
         }
     }
+    
+
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap != null) {
@@ -416,7 +418,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(if (isEnglish) "AI Tools" else "AI 互动", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text(if (isEnglish) "Tools" else "工具", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
@@ -477,66 +479,6 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) }
                         )
                         
-                        Divider()
-                        
-                        // Category 2: AI Functions
-                        Text(
-                            text = if (isEnglish) " AI Functions" else " AI 功能",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.Gray,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                        
-                        DropdownMenuItem(
-                            text = { Text(if (isEnglish) "Image Chat" else "图片识图") },
-                            onClick = {
-                                showAIAndToolsMenu = false
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                                    try {
-                                        cameraLauncher.launch()
-                                    } catch (e: Exception) {
-                                        val errorMsg = if (isEnglish) "Cannot start camera: ${e.localizedMessage}" else "无法启动相机: ${e.localizedMessage}"
-                                        viewModel.showError(errorMsg)
-                                    }
-                                } else {
-                                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                                }
-                            },
-                            leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (isRecording) (if (isEnglish) "Stop Sending" else "停止发送") else (if (isEnglish) "AI Chat" else "AI对话")) },
-                            onClick = {
-                                showAIAndToolsMenu = false
-                                if (isRecording) {
-                                    viewModel.toggleRecording() 
-                                } else {
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                        viewModel.toggleRecording()
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    }
-                                }
-                            },
-                            leadingIcon = { 
-                                Icon(
-                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Chat, 
-                                    contentDescription = null,
-                                    tint = if (isRecording) Color.Red else LocalContentColor.current
-                                ) 
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (isEnglish) "Reset AI" else "重置 AI") },
-                            onClick = {
-                                showAIAndToolsMenu = false
-                                viewModel.resetConversation()
-                            },
-                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
-                        )
-
-
-
                         Divider()
 
                         // Category: Property Tools
@@ -640,6 +582,14 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                 text = { Text(userName) },
                                 onClick = { showUserProfileMenu = false },
                                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (isEnglish) "Reset Conversation" else "重置对话") },
+                                onClick = { 
+                                    showUserProfileMenu = false
+                                    viewModel.resetConversation() 
+                                },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                             )
                             Divider()
                             DropdownMenuItem(
@@ -852,12 +802,31 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             // Bottom Buttons Row Removed
 
             // Text Input Fallback Area
-            if (displayMode == DisplayMode.CHAT || selectedTopic == AITopic.CLT_VIBE) {
-                TextInputArea(
-                    onSend = { viewModel.sendMessage(it) },
-                    placeholder = if (isEnglish) "Type a question..." else "输入问题..."
-                )
-            }
+            // Text Input Area - Always Visible
+            TextInputArea(
+                onSend = { viewModel.sendMessage(it) },
+                onCameraClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        try {
+                            cameraLauncher.launch()
+                        } catch (e: Exception) {
+                            val errorMsg = if (isEnglish) "Cannot start camera: ${e.localizedMessage}" else "无法启动相机: ${e.localizedMessage}"
+                            viewModel.showError(errorMsg)
+                        }
+                    } else {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                },
+                onMicClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        viewModel.toggleRecording()
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                isRecording = isRecording,
+                placeholder = if (isEnglish) "Type or speak..." else "输入或语音..."
+            )
         }
     }
 }
@@ -984,7 +953,13 @@ fun SettingsScreen(viewModel: TeacherViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TextInputArea(onSend: (String) -> Unit, placeholder: String) {
+fun TextInputArea(
+    onSend: (String) -> Unit, 
+    onCameraClick: () -> Unit, 
+    onMicClick: () -> Unit,
+    isRecording: Boolean,
+    placeholder: String
+) {
     var text by remember { mutableStateOf("") }
     
     Surface(
@@ -998,6 +973,14 @@ fun TextInputArea(onSend: (String) -> Unit, placeholder: String) {
                 .imePadding(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = onCameraClick,
+                colors = IconButtonDefaults.iconButtonColors(contentColor = PrimaryPurple)
+            ) {
+                Icon(Icons.Default.CameraAlt, contentDescription = "Camera")
+            }
+            Spacer(Modifier.width(4.dp))
+
             TextField(
                 value = text,
                 onValueChange = { text = it },
@@ -1013,17 +996,29 @@ fun TextInputArea(onSend: (String) -> Unit, placeholder: String) {
                 )
             )
             Spacer(Modifier.width(8.dp))
+            
             IconButton(
                 onClick = {
                     if (text.isNotBlank()) {
                         onSend(text)
                         text = ""
+                    } else {
+                        onMicClick()
                     }
                 },
-                enabled = text.isNotBlank(),
-                colors = IconButtonDefaults.iconButtonColors(contentColor = PrimaryPurple)
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (isRecording) Color.Red else Color.Transparent,
+                    contentColor = if (isRecording) Color.White else PrimaryPurple
+                )
             ) {
-                Icon(Icons.Default.Send, contentDescription = "Send")
+                Icon(
+                    imageVector = when {
+                        isRecording -> Icons.Default.Stop
+                        text.isNotBlank() -> Icons.Default.Send
+                        else -> Icons.Default.Mic
+                    }, 
+                    contentDescription = if (isRecording) "Stop" else "Send/Mic"
+                )
             }
         }
     }
@@ -1586,7 +1581,7 @@ fun RegisterDialog(
     var agreedToTerms by remember { mutableStateOf(false) }
     var showEULA by remember { mutableStateOf(false) }
     
-    val context = androidx.compose.ui.platform.LocalContext.current
+
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     
     // EULA Dialog

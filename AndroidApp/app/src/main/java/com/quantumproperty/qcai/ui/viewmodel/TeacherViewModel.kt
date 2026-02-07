@@ -349,8 +349,16 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
 
         // Update TTS language
-        val locale = if (language == AppLanguage.CHINESE) java.util.Locale.CHINESE else java.util.Locale.US
-        ttsManager?.setLanguage(locale)
+        val locale = if (language == AppLanguage.CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.US
+        val ttsSuccess = ttsManager?.setLanguage(locale) ?: false
+        
+        if (!ttsSuccess && language == AppLanguage.CHINESE) {
+             // If we failed to set Chinese (likely missing data), warn the user
+             val isEnglishUI = _appLanguage.value == AppLanguage.ENGLISH // Actually we just set it to Chinese above, so this will be false
+             val msg = "⚠️ 您的设备似乎没有安装中文语音包 (TTS Data)。\nSpeech functionality may not work for Chinese."
+             // Don't revert UI language because user might still want to read text, but warn about Audio
+             _errorMessage.value = msg
+        }
     }
 
     fun setTopic(topic: AITopic) {
@@ -627,22 +635,19 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         currentSequenceIndex = 0
         
         // Listen for specific "DONE_TOPIC" event only
-        ttsManager?.onSpeechCompleted = {
+        ttsManager?.onSpeechCompleted = { id ->
             if (isSequentialReading) {
-                 // We don't distinguish ID here in the callback var, but we assume
-                 // if onDone fires and we are sequential, check if we need to proceed.
-                 // Ideally we should check the utteranceID from the callback, 
-                 // but existing TTSManager doesn't pass it back in the lambda.
-                 // Assuming the listener fires for the last item in the queue.
-                 
-                viewModelScope.launch {
-                    currentSequenceIndex++
-                    if (currentSequenceIndex < sequentialTopics.size) {
-                         readCurrentSequenceStep()
-                    } else {
-                        isSequentialReading = false
+                 // Check if the completed utterance is the one marking the end of the current topic
+                 if (id == "SEQ_DONE_$currentSequenceIndex") {
+                    viewModelScope.launch {
+                        currentSequenceIndex++
+                        if (currentSequenceIndex < sequentialTopics.size) {
+                             readCurrentSequenceStep()
+                        } else {
+                            isSequentialReading = false
+                        }
                     }
-                }
+                 }
             }
         }
         

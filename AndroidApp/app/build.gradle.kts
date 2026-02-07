@@ -23,10 +23,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("upload-keystore.jks")
-            storePassword = "password"
+            storeFile = file("../../QCAI.jks")
+            storePassword = "WYGymf02"
             keyAlias = "key0"
-            keyPassword = "password"
+            keyPassword = "WYGymf02"
         }
     }
 
@@ -41,14 +41,15 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14" // Upgrade to match 1.9.20+ better (1.5.1 might be too old for 1.9.20)

@@ -16,8 +16,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
+
+import com.google.gson.annotations.SerializedName
+
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -44,23 +45,23 @@ data class ExplainResponse(val explanation: String)
 data class RiskRequest(val holdings: List<String>)
 data class RiskResponse(
     val stats: List<String>, 
-    val ai_analysis: String?,
-    val correlation_chart: String?
+    @SerializedName("ai_analysis") val aiAnalysis: String?,
+    @SerializedName("correlation_chart") val correlationChart: String?
 )
 
 data class StockReport(
     val symbol: String,
-    val valuation_score: Int,
-    val valuation_msg: String,
-    val safety_score: Int,
-    val safety_msg: String,
-    val trend_score: Int,
-    val trend_msg: String
+    @SerializedName("valuation_score") val valuationScore: Int,
+    @SerializedName("valuation_msg") val valuationMsg: String,
+    @SerializedName("safety_score") val safetyScore: Int,
+    @SerializedName("safety_msg") val safetyMsg: String,
+    @SerializedName("trend_score") val trendScore: Int,
+    @SerializedName("trend_msg") val trendMsg: String
 )
 
 data class TrendingStock(
     val symbol: String,
-    val change_pct: Double,
+    @SerializedName("change_pct") val changePct: Double,
     val price: Double
 )
 
@@ -208,7 +209,6 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
     
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
-    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         // Initial fetch
@@ -260,9 +260,9 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(item.symbol, fontWeight = FontWeight.Bold)
                                 Text(
-                                    "${if(item.change_pct >=0) "+" else ""}${String.format("%.1f", item.change_pct)}%", 
+                                    "${if(item.changePct >=0) "+" else ""}${String.format("%.1f", item.changePct)}%", 
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (item.change_pct >= 0) Color(0xFF34C759) else Color(0xFFFF3B30)
+                                    color = if (item.changePct >= 0) Color(0xFF34C759) else Color(0xFFFF3B30)
                                 )
                             }
                         }
@@ -360,9 +360,9 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                                 Icon(Icons.Default.Info, contentDescription = "Info", tint = LocalCyberBlue, modifier = Modifier.size(18.dp))
                             }
                             
-                            ScoreRow("Valuation", r.valuation_score, r.valuation_msg)
-                            ScoreRow("Safety", r.safety_score, r.safety_msg)
-                            ScoreRow("Trend", r.trend_score, r.trend_msg)
+                            ScoreRow("Valuation", r.valuationScore, r.valuationMsg)
+                            ScoreRow("Safety", r.safetyScore, r.safetyMsg)
+                            ScoreRow("Trend", r.trendScore, r.trendMsg)
                         }
                         Divider(modifier = Modifier.padding(vertical = 12.dp))
                     }
@@ -623,12 +623,12 @@ fun PortfolioRiskView(geminiKey: String, onOpenSettings: () -> Unit) {
                      }
                      
                      // New: Correlation Matrix Heatmap
-                     risk.correlation_chart?.let { base64Str ->
+                     risk.correlationChart?.let { base64Str ->
                          val imageBitmap = remember(base64Str) {
                              try {
                                  val decodedBytes = Base64.decode(base64Str, Base64.DEFAULT)
                                  BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)?.asImageBitmap()
-                             } catch (e: Exception) { null }
+                             } catch (_: Exception) { null }
                          }
 
                          if (imageBitmap != null) {
@@ -649,7 +649,7 @@ fun PortfolioRiskView(geminiKey: String, onOpenSettings: () -> Unit) {
                      
                      Text("AI Risk Assessment", style = MaterialTheme.typography.titleMedium, color = LocalAccentOrange, fontWeight = FontWeight.Bold)
                      
-                     risk.ai_analysis?.let { analysis ->
+                     risk.aiAnalysis?.let { analysis ->
                          Card(
                              colors = CardDefaults.cardColors(containerColor = LocalAccentOrange.copy(alpha = 0.1f)),
                              shape = RoundedCornerShape(10.dp)
