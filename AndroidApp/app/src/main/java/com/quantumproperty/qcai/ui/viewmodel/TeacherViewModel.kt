@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 
 enum class DisplayMode {
-    WEB, CHAT, SETTINGS
+    WEB, CHAT
 }
 
 class TeacherViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,7 +47,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _topMenuItems = MutableStateFlow<List<TopMenuItem>>(emptyList())
     val topMenuItems = _topMenuItems.asStateFlow()
 
-    private val _selectedTopic = MutableStateFlow(AITopic.WORLD_NEWS)
+    private val _selectedTopic = MutableStateFlow(AITopic.CLT_VIBE)
     val selectedTopic = _selectedTopic.asStateFlow()
 
     private val _displayMode = MutableStateFlow(DisplayMode.WEB)
@@ -99,11 +99,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private val _showHotToolWebView = MutableStateFlow(false)
-    val showHotToolWebView = _showHotToolWebView.asStateFlow()
+    private val _showInAppBrowser = MutableStateFlow(false)
+    val showInAppBrowser = _showInAppBrowser.asStateFlow()
 
-    private val _hotToolWebUrl = MutableStateFlow<String?>(null)
-    val hotToolWebUrl = _hotToolWebUrl.asStateFlow()
+    private val _inAppBrowserUrl = MutableStateFlow<String?>(null)
+    val inAppBrowserUrl = _inAppBrowserUrl.asStateFlow()
 
     private val _recommendations = MutableStateFlow<List<Recommendation>>(emptyList())
     val recommendations = _recommendations.asStateFlow()
@@ -124,11 +124,20 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _showRentalsView = MutableStateFlow(false)
     val showRentalsView = _showRentalsView.asStateFlow()
 
+    private val _showTheSceneView = MutableStateFlow(false)
+    val showTheSceneView = _showTheSceneView.asStateFlow()
+    
+    private val _sceneData = MutableStateFlow<com.quantumproperty.qcai.data.SceneResponse?>(null)
+    val sceneData = _sceneData.asStateFlow()
+
     private val _speechRate = MutableStateFlow(1.0f)
     val speechRate = _speechRate.asStateFlow()
 
     private val _speechPitch = MutableStateFlow(1.0f)
     val speechPitch = _speechPitch.asStateFlow()
+
+    private val _isSpeechEnabled = MutableStateFlow(false)
+    val isSpeechEnabled = _isSpeechEnabled.asStateFlow()
 
     val isRecording: StateFlow<Boolean> 
         get() = speechManager?.isRecording ?: MutableStateFlow(false).asStateFlow()
@@ -152,7 +161,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         // Initial URL setup
         // Initial URL setup
-        updateDisplayMode(AITopic.WORLD_NEWS)
+        updateDisplayMode(AITopic.CLT_VIBE)
         refreshHotToolList()
         
         // Robust fetch with retry for startup
@@ -267,7 +276,10 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 history.add(Recommendation(
                     name = obj.getString("name"),
                     score = obj.getInt("score"),
-                    reason = obj.getString("reason")
+                    reason = obj.getString("reason"),
+                    price = obj.optString("price").takeIf { it.isNotEmpty() },
+                    rating = obj.optString("rating").takeIf { it.isNotEmpty() },
+                    imageUrl = obj.optString("imageUrl").takeIf { it.isNotEmpty() }
                 ))
             }
             _vibeHistory.value = history
@@ -282,6 +294,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 obj.put("name", rec.name)
                 obj.put("score", rec.score)
                 obj.put("reason", rec.reason)
+                obj.put("price", rec.price)
+                obj.put("rating", rec.rating)
+                obj.put("imageUrl", rec.imageUrl)
                 array.put(obj)
             }
             PreferenceManager.vibeHistoryJson = array.toString()
@@ -307,10 +322,24 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 val arr = json.getJSONArray("recommendations")
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
-                    recList.add(Recommendation(name = obj.getString("name"), score = obj.getInt("score"), reason = obj.getString("reason")))
+                    recList.add(Recommendation(
+                        name = obj.getString("name"), 
+                        score = obj.getInt("score"), 
+                        reason = obj.getString("reason"),
+                        price = obj.optString("price").takeIf { it.isNotEmpty() },
+                        rating = obj.optString("rating").takeIf { it.isNotEmpty() },
+                        imageUrl = obj.optString("image_url").takeIf { it.isNotEmpty() } ?: obj.optString("imageUrl").takeIf { it.isNotEmpty() }
+                    ))
                 }
             } else if (json.has("name") && json.has("score")) {
-                recList.add(Recommendation(name = json.getString("name"), score = json.getInt("score"), reason = json.getString("reason")))
+                recList.add(Recommendation(
+                    name = json.getString("name"), 
+                    score = json.getInt("score"), 
+                    reason = json.getString("reason"),
+                    price = json.optString("price").takeIf { it.isNotEmpty() },
+                    rating = json.optString("rating").takeIf { it.isNotEmpty() },
+                    imageUrl = json.optString("image_url").takeIf { it.isNotEmpty() } ?: json.optString("imageUrl").takeIf { it.isNotEmpty() }
+                ))
             }
             
             if (recList.isNotEmpty()) {
@@ -354,7 +383,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         if (!ttsSuccess && language == AppLanguage.CHINESE) {
              // If we failed to set Chinese (likely missing data), warn the user
-             val isEnglishUI = _appLanguage.value == AppLanguage.ENGLISH // Actually we just set it to Chinese above, so this will be false
+             //val isEnglishUI = _appLanguage.value == AppLanguage.ENGLISH // Actually we just set it to Chinese above, so this will be false
              val msg = "⚠️ 您的设备似乎没有安装中文语音包 (TTS Data)。\nSpeech functionality may not work for Chinese."
              // Don't revert UI language because user might still want to read text, but warn about Audio
              _errorMessage.value = msg
@@ -388,9 +417,21 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         ttsManager?.updateConfig(_speechRate.value, pitch)
     }
 
-    fun openSettings() {
-        _displayMode.value = DisplayMode.SETTINGS
+    fun updateSpeechConfig(rate: Float, pitch: Float) {
+        _speechRate.value = rate
+        _speechPitch.value = pitch
+        PreferenceManager.speechRate = rate
+        PreferenceManager.speechPitch = pitch
+        ttsManager?.updateConfig(rate, pitch)
     }
+
+    fun toggleSpeech() {
+        _isSpeechEnabled.value = !_isSpeechEnabled.value
+        if (!_isSpeechEnabled.value) {
+            ttsManager?.stop()
+        }
+    }
+
 
     fun openLogin() {
         _showLoginDialog.value = true
@@ -467,6 +508,17 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout() {
         userManager?.logout()
+    }
+
+    fun deleteAccount() {
+        viewModelScope.launch {
+            val result = userManager?.deleteAccount()
+            if (result?.isSuccess == true) {
+                // Logout/Clear UI state is handled by authState listener in UserManager
+            } else {
+                showError(result?.exceptionOrNull()?.message ?: "Delete account failed")
+            }
+        }
     }
 
     private val topMenuManager by lazy { com.quantumproperty.qcai.data.TopMenuManager() }
@@ -577,8 +629,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun sendMessage(text: String, image: Bitmap? = null) {
-        if (!checkKeys()) return
+    fun sendMessage(text: String, image: Bitmap? = null, customPrompt: String? = null) {
+        // No local key check needed - all queries route through backend which has server-side keys
 
         _displayMode.value = DisplayMode.CHAT
         val newUserMsg = ChatMessage(text = text, isUser = true)
@@ -587,21 +639,56 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             try {
-                val response = aiService.sendMessage(
-                    text = text,
-                    engine = _selectedEngine.value,
-                    topic = _selectedTopic.value,
-                    language = _appLanguage.value,
-                    image = image
-                )
-                val aiMsg = ChatMessage(text = response, isUser = false)
+                var responseText = " "
+                var extraData: Map<String, Any>? = null
+
+                // Route ALL queries through backend (backend has server-side Gemini keys)
+                try {
+                    val chatResponse = com.quantumproperty.qcai.data.CityOSService.instance.queryChat(
+                        question = text,
+                        engine = _selectedEngine.value.name,
+                        userAddress = com.quantumproperty.qcai.data.PreferenceManager.homeAddress,
+                        language = if (_appLanguage.value == AppLanguage.CHINESE) "zh" else "en",
+                        customPrompt = customPrompt  // Pass custom prompt if provided
+                    )
+                    responseText = chatResponse.answer
+                    extraData = chatResponse.extraData
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    // Fallback to local AIService ONLY if local keys are available
+                    if (PreferenceManager.geminiKey.isNotEmpty() || PreferenceManager.openAIKey.isNotEmpty()) {
+                        responseText = aiService.sendMessage(
+                            text = text,
+                            engine = _selectedEngine.value,
+                            topic = _selectedTopic.value,
+                            language = _appLanguage.value,
+                            image = image
+                        )
+                    } else {
+                        responseText = if (_appLanguage.value == AppLanguage.CHINESE) 
+                            "⚠️ 服务器暂时无法响应，请稍后重试。" 
+                        else 
+                            "⚠️ Server is temporarily unavailable. Please try again later."
+                    }
+                }
+
+                // Clean up the text for display (remove MATCH_SCORE_JSON if present)
+                var displayText = responseText
+                if (responseText.contains("MATCH_SCORE_JSON")) {
+                    val startIdx = responseText.indexOf("MATCH_SCORE_JSON")
+                    displayText = responseText.substring(0, startIdx).trim()
+                }
+
+                val aiMsg = ChatMessage(text = displayText, isUser = false, extraData = extraData)
                 _messages.value = _messages.value + aiMsg
                 
                 if (_selectedTopic.value == AITopic.CLT_VIBE) {
-                    parseRecommendations(response)
+                    parseRecommendations(responseText)
                 }
                 
-                ttsManager?.speak(response)
+                if (isSpeechEnabled.value) {
+                    ttsManager?.speak(responseText)
+                }
             } catch (e: Exception) {
                 handleError(e.message)
             } finally {
@@ -839,8 +926,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
             
             
             _isLoading.value = false
-            // Send message but hide it from user view
-            sendMessageInternal(prompt, true, AITopic.REAL_ESTATE, address)
+            // Pass the detailed prompt as customPrompt, and the address as the question
+            sendMessage(text = address, customPrompt = prompt)
         }
     }
     
@@ -937,14 +1024,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openHotTool(url: String) {
-        _hotToolWebUrl.value = url
-        _showHotToolWebView.value = true
+    fun openInAppBrowser(url: String) {
+        _inAppBrowserUrl.value = url
+        _showInAppBrowser.value = true
     }
 
-    fun closeHotTool() {
-        _showHotToolWebView.value = false
-        _hotToolWebUrl.value = null
+    fun closeInAppBrowser() {
+        _showInAppBrowser.value = false
+        _inAppBrowserUrl.value = null
     }
     
     // Community Features Navigation
@@ -970,6 +1057,30 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     
     fun closeRentalsView() {
         _showRentalsView.value = false
+    }
+
+    fun showTheSceneView(vibe: String) {
+        _showTheSceneView.value = true
+        fetchScene(vibe)
+    }
+
+    fun closeTheSceneView() {
+        _showTheSceneView.value = false
+        _sceneData.value = null
+    }
+
+    fun fetchScene(vibe: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val data = com.quantumproperty.qcai.data.CityOSService.instance.fetchScene(vibe)
+                _sceneData.value = data
+            } catch (e: Exception) {
+                showError(e.message ?: "Failed to fetch scene")
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     private fun handleError(error: String?) {

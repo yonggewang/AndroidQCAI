@@ -1,5 +1,9 @@
 package com.quantumproperty.qcai.ui.screen
 
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.time.ZoneId
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -7,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,24 +27,68 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.quantumproperty.qcai.data.Recommendation
 import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
 import com.quantumproperty.qcai.data.ChatMessage
 import com.quantumproperty.qcai.data.AITopic
+import com.quantumproperty.qcai.data.ChatConfigManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
     val recommendations by viewModel.recommendations.collectAsState()
-    val vibeHistory by viewModel.vibeHistory.collectAsState()
     val messages by viewModel.messages.collectAsState()
     var energyLevel by remember { mutableStateOf(50f) }
-
     val lastAIMessage = messages.lastOrNull { !it.isUser && !it.isHidden }
+    
+    // Address State
+    var savedHomeAddress by remember { mutableStateOf(com.quantumproperty.qcai.data.PreferenceManager.homeAddress) }
+    var isShowingAddressEditor by remember { mutableStateOf(false) }
 
+    var dailyBrief by remember { mutableStateOf<com.quantumproperty.qcai.data.DailyBriefResponse?>(null) }
+    var isLoadingBrief by remember { mutableStateOf(true) }
+    var isExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // Remote Config State
+    val configSuggestions by ChatConfigManager.instance.suggestions.collectAsState()
+    val featuredSuggestions by ChatConfigManager.instance.featuredSuggestions.collectAsState()
+    val isConfigLoaded by ChatConfigManager.instance.isLoaded.collectAsState()
+
+    suspend fun loadBrief(context: android.content.Context, force: Boolean = false) {
+        isLoadingBrief = true
+        try {
+            dailyBrief = com.quantumproperty.qcai.data.CityOSService.instance.fetchDailyBrief(forceRefresh = force)
+        } catch (e: Exception) { 
+            e.printStackTrace()
+            // Show error toast
+            android.widget.Toast.makeText(context, "Briefing Load Failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        } finally { isLoadingBrief = false }
+    }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val listState = rememberLazyListState()
+    
+    LaunchedEffect(Unit) { 
+        launch { ChatConfigManager.instance.fetchConfig() }
+        loadBrief(context) 
+    }
+    
+    // Auto-Scroll to Expert Intel when a new AI message arrives
+    LaunchedEffect(lastAIMessage) {
+        if (lastAIMessage != null) {
+            // Wait a brief moment for the item to be composed and measured
+            kotlinx.coroutines.delay(300) 
+            listState.animateScrollToItem(5)
+        }
+    }
 
     val filterChips = listOf(
-        "Fast Wi-Fi", "Quiet for Work", "Scenic View", "Pet Friendly", 
-        "Live Music", "Family Friendly", "Late Night", "Outdoor Seating"
+        "Tech Networking", "Live Music", "Art & Culture", "Social Mixers", 
+        "Family Friendly", "Fast Wi-Fi", "Quiet for Work", "Scenic View", 
+        "Pet Friendly", "Late Night", "Outdoor Seating"
     )
 
     val energyLevelLabel = when {
@@ -48,385 +97,627 @@ fun CLTVibeView(viewModel: TeacherViewModel, isEnglish: Boolean) {
         else -> if (isEnglish) "Lively" else "热闹"
     }
 
-    val sampleQuestions = if (isEnglish) {
-        listOf(
-            "Find a cozy coffee shop in South End good for remote work.",
-            "Where is a scenic rooftop bar Uptown that isn't too loud?",
-            "Best vintage clothing store in Plaza Midwood.",
-            "Where can I find live jazz music tonight?",
-            "We did a great job today. We want to go out and celebrate, where should we go?"
-        )
-    } else {
-        listOf(
-            "在 South End 找一家适合远程办公的舒适咖啡馆。",
-            "Uptown 有哪些风景好但不太吵的屋顶酒吧？",
-            "Plaza Midwood 最好的复古服装店是哪家？",
-            "今晚哪里有现场爵士乐演出？",
-            "我们今天工作很出色，想去庆祝一下，有什么推荐的地方？"
-        )
-    }
-
     val energyColor by animateColorAsState(
         targetValue = when {
             energyLevel < 30 -> Color(0xFF00ACC1)
             energyLevel < 70 -> Color(0xFF3F51B5)
-            else -> Color(0xFF673AB7)
+            else -> Color(0xFF9C27B0)
         }
     )
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF8F9FA)),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        // Daily Briefing Card (City OS)
-        item {
-            var dailyBrief by remember { mutableStateOf<com.quantumproperty.qcai.data.DailyBriefResponse?>(null) }
-            var isLoadingBrief by remember { mutableStateOf(true) }
-            var isExpanded by remember { mutableStateOf(false) }
+    val sampleQuestions = if (configSuggestions.isNotEmpty()) {
+        configSuggestions.map { it.prompt.localized(isEnglish) }
+    } else if (isEnglish) {
+        listOf(
+            "Tell me about Coco and the Director. Is it expensive?",
+            "Best breweries in South End with outdoor seating?",
+            "Recommend a romantic dinner spot in Uptown.",
+            "Where can I find the best coffee in NoDa?",
+            "Is it safe to walk around Uptown at night?",
+            "Find a family-friendly park near Dilworth.",
+            "What are the top-rated schools in Ballantyne?",
+            "Any live music venues active this weekend?",
+            "Where to find authentic NC BBQ in Charlotte?"
+        )
+    } else {
+        listOf(
+            "Coco and the Director 怎么样？贵吗？",
+            "推荐 South End 有户外座位的精酿啤酒厂。",
+            "Uptown 有哪些适合约会的浪漫餐厅？",
+            "NoDa 最好的咖啡馆在哪里？",
+            "晚上在 Uptown 散步安全吗？",
+            "Dilworth 附近有哪些适合家庭的公园？",
+            "Ballantyne 评分最高的学校有哪些？",
+            "这周末有哪些有现场音乐的场所？",
+            "夏洛特哪里有正宗的北卡烧烤？"
+        )
+    }
 
-            LaunchedEffect(Unit) {
-                try {
-                    dailyBrief = com.quantumproperty.qcai.data.CityOSService.instance.fetchDailyBrief()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    isLoadingBrief = false
+
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF050505))) {
+        // High-Tech Ambient Blurs
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF007AFF).copy(alpha = 0.15f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(-100f, -100f),
+                    radius = 800f
+                ),
+                radius = 800f
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF9D50BB).copy(alpha = 0.12f), Color.Transparent),
+                    center = androidx.compose.ui.geometry.Offset(size.width + 100f, 600f),
+                    radius = 700f
+                ),
+                radius = 700f
+            )
+        }
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            // 1. TOP STATUS BAR (Branding)
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column {
+                        Text(
+                            text = if (isEnglish) "Charlotte Today" else "夏洛特今日",
+                            color = Color.White,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isEnglish) "City OS Intel" else "城市综合智能",
+                            color = Color(0xFF007AFF),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                    }
+                    IconButton(onClick = { scope.launch { loadBrief(context, true) } }) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 
-            if (dailyBrief != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().animateContentSize(),
-                    shape = RoundedCornerShape(20.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF007AFF), Color(0xFF0055A0))
-                                )
-                            )
-                            .padding(20.dp)
+            // 2. DAILY BRIEFING (Glassmorphic)
+            item {
+                if (dailyBrief != null) {
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().animateContentSize(),
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(24.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            // Header
+                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.Cyan, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = if (isEnglish) "Charlotte Today" else "今日夏洛特",
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f)
+                                    text = if (isEnglish) "Live Briefing" else "实时简报",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
-                                dailyBrief?.weather?.let { w ->
-                                    Icon(
-                                        imageVector = Icons.Default.CloudQueue, // Simple cloud icon for now
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
+
+                                // Freshness Badge
+                                val minutesAgo = try {
+                                    val instant = Instant.parse(dailyBrief?.generatedAt?.replace(".\\d+".toRegex(), "Z"))
+                                    ChronoUnit.MINUTES.between(instant, Instant.now())
+                                } catch (e: Exception) { 0L }
+
+                                Spacer(Modifier.width(8.dp))
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
                                     Text(
-                                        text = "${w.temp.toInt()}°",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
+                                        text = if (minutesAgo < 1) (if (isEnglish) "Just now" else "刚刚") else (if (isEnglish) "${minutesAgo}m ago" else "${minutesAgo}分钟前"),
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
+                                }
+
+                                Spacer(Modifier.weight(1f))
+                                dailyBrief?.weather?.let { w ->
+                                    Text(text = "${w.temp.toInt()}°", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                             }
 
-                            // Briefing Text
                             Text(
                                 text = dailyBrief?.briefingText ?: "",
-                                color = Color.White.copy(alpha = 0.95f),
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                maxLines = if (isExpanded) Int.MAX_VALUE else 3,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp,
+                                maxLines = if (isExpanded) Int.MAX_VALUE else 4,
                                 modifier = Modifier.clickable { isExpanded = !isExpanded }
                             )
 
-                            if (!isExpanded) {
-                                Text(
-                                    text = if (isEnglish) "Tap to read more..." else "点击阅读更多...",
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    fontSize = 12.sp
-                                )
+                            // Proactive Smart Trigger Cards in Briefing
+                            dailyBrief?.extraData?.let { extra ->
+                                Column(
+                                    modifier = Modifier.clickable {
+                                        scope.launch {
+                                            // Scroll to Expert Intel area (index 5)
+                                            // The click itself doesn't generate content, so we just scroll to the section
+                                            listState.animateScrollToItem(5)
+                                        }
+                                    },
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    (extra["reality_check"] as? Map<String, Any>)?.let { nbData ->
+                                        RealityCheckDashboardView(data = nbData, isEnglish = isEnglish)
+                                    }
+                                    (extra["the_scene"] as? Map<String, Any>)?.let { sceneData ->
+                                        TheSceneDashboardView(data = sceneData, isEnglish = isEnglish)
+                                    }
+                                }
                             }
 
-                            // News Chips
-                            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 items(dailyBrief?.topNews ?: emptyList()) { news ->
                                     Surface(
-                                        color = Color.White.copy(alpha = 0.2f),
+                                        color = Color.White.copy(alpha = 0.1f),
                                         shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier.clickable { 
-                                            uriHandler.openUri(news.url)
-                                        }
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
                                     ) {
                                         Text(
                                             text = news.headline,
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                            maxLines = 1
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                         )
                                     }
                                 }
                             }
                         }
                     }
-                }
-            } else if (isLoadingBrief) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(150.dp)
-                        .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(20.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Color(0xFF007AFF))
-                }
-            } else {
-               // Fallback / Service Down
-               // Reuse the old Hero Card style as fallback if briefing fails?
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF6A1B9A), Color(0xFF4527A0))
-                                )
-                            )
-                            .padding(24.dp)
+
+                    // Social Vibe Entry
+                    Spacer(Modifier.height(16.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF9C27B0).copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.2f))
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.White.copy(alpha = 0.2f),
-                                modifier = Modifier.size(52.dp)
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.showTheSceneView("Tech") },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
+                                    imageVector = Icons.Default.MusicNote,
                                     contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.padding(14.dp)
+                                    tint = Color(0xFF9C27B0),
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF9C27B0).copy(alpha = 0.1f))
+                                        .padding(8.dp)
                                 )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isEnglish) "The Scene" else "社群氛围",
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (isEnglish) "Browse local events and hot spots" else "浏览本地活动和热门地点",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF9C27B0))
                             }
-                            Spacer(Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = if (isEnglish) "Charlotte Concierge" else "夏洛特管家",
-                                    color = Color.White,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = if (isEnglish) "Hyper-local vibes & schedules" else "深度本地探索与生活指南",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 13.sp
-                                )
+                            
+                            Spacer(Modifier.height(12.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(listOf("Tech", "Music", "Art", "Social", "Family")) { cat ->
+                                    Surface(
+                                        color = Color(0xFF9C27B0).copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable {
+                                            val prompt = if (isEnglish) "What's the $cat scene like in Charlotte?" else "夏洛特的 $cat 氛围怎么样？"
+                                            viewModel.sendMessage(prompt)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = cat,
+                                            color = Color(0xFF9C27B0),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
-        }
-
-
-
-        // Vibe Check Selector (Compact)
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = if (isEnglish) "Vibe Check" else "氛围筛选",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-                
-                // Compact Slider Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFF0F0F0)) // Light gray background
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = if (isEnglish) "Energy:" else "活跃度:",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
-                    
-                    Text(
-                        text = energyLevelLabel,
-                        fontWeight = FontWeight.Bold,
-                        color = energyColor,
-                        fontSize = 14.sp,
-                        modifier = Modifier.width(70.dp)
-                    )
-                    
-                    Slider(
-                        value = energyLevel,
-                        onValueChange = { energyLevel = it },
-                        valueRange = 0f..100f,
-                        modifier = Modifier.weight(1f),
-                        colors = SliderDefaults.colors(
-                            thumbColor = energyColor,
-                            activeTrackColor = energyColor
-                        )
-                    )
-                }
-
-                // Chips
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    items(filterChips) { chip ->
-                        Surface(
-                            modifier = Modifier.clickable {
-                                val q = if (isEnglish) 
-                                    "Find a $chip place in Charlotte with $energyLevelLabel energy" 
-                                    else "帮我找一个具有 $chip 氛围且活跃度为 $energyLevelLabel 的地方"
-                                viewModel.sendMessage(q)
-                            },
-                            shape = RoundedCornerShape(50.dp),
-                            color = Color(0xFF3F51B5).copy(alpha = 0.1f)
+                } else if (isLoadingBrief) {
+                    // High-Tech Loading Card with Circular Spinner
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(24.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(40.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 3.dp
+                            )
                             Text(
-                                text = chip,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF3F51B5)
+                                text = if (isEnglish) "Fetching City Intel..." else "正在获取城市信息...",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
+                } else {
+                    // Retry Button
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clickable { 
+                            scope.launch { loadBrief(context, true) }
+                        },
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Text(
+                            text = if (isEnglish) "Tap to Load Intel" else "点击加载城市智能",
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(20.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
-        }
 
-        // Latest Response
-        lastAIMessage?.let { msg ->
+            // 2.2 HOME ADDRESS SETTINGS
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White.copy(alpha = 0.05f),
+                    shape = RoundedCornerShape(24.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Home, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (isEnglish) "My Neighborhood" else "我的街区",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = if (savedHomeAddress.isEmpty()) (if (isEnglish) "Set Home" else "设置地址") else (if (isEnglish) "Edit" else "修改"),
+                                color = Color(0xFF007AFF),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { isShowingAddressEditor = !isShowingAddressEditor }
+                            )
+                        }
+
+                        if (savedHomeAddress.isNotEmpty() && !isShowingAddressEditor) {
+                            Text(
+                                text = savedHomeAddress,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else if (isShowingAddressEditor) {
+                            TextField(
+                                value = savedHomeAddress,
+                                onValueChange = { 
+                                    savedHomeAddress = it
+                                    com.quantumproperty.qcai.data.PreferenceManager.homeAddress = it
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(if (isEnglish) "Enter your CLT address..." else "输入您的夏洛特地址...") },
+                                colors = TextFieldDefaults.colors(
+                                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                                    focusedContainerColor = Color.White.copy(alpha = 0.1f)
+                                )
+                            )
+                            Button(
+                                onClick = { isShowingAddressEditor = false },
+                                modifier = Modifier.align(Alignment.End),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(if (isEnglish) "Save" else "保存")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2.5 FEATURED SUGGESTIONS (Chips)
+            if (featuredSuggestions.isNotEmpty()) {
+                item {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(featuredSuggestions) { suggestion ->
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    var prompt = suggestion.prompt.localized(isEnglish)
+                                    if (savedHomeAddress.isNotEmpty()) {
+                                        prompt = prompt.replace("[your address]", savedHomeAddress)
+                                                       .replace("[address]", savedHomeAddress)
+                                    }
+                                    viewModel.sendMessage(prompt)
+                                    scope.launch {
+                                        // Scroll to Expert Intel area (index 5)
+                                        listState.animateScrollToItem(5)
+                                    }
+                                },
+                                color = Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = suggestion.emoji, fontSize = 14.sp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = suggestion.label.localized(isEnglish),
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Vibe Pulse Chips
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = if (isEnglish) "Latest Response" else "最新回答",
+                        text = if (isEnglish) "Select Energy" else "选择活跃度",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
                         modifier = Modifier.padding(horizontal = 4.dp)
                     )
-                    Surface(
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White,
-                        shadowElevation = 1.dp
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val displayText = msg.text.split("MATCH_SCORE_JSON")[0].trim()
-                        Text(
-                            text = displayText,
-                            modifier = Modifier.padding(20.dp),
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
-                            color = Color(0xFF333333)
-                        )
+                        VibePulseChip(
+                            label = if (isEnglish) "Chill" else "宁静",
+                            icon = Icons.Default.Spa,
+                            color = Color(0xFF00ACC1),
+                            isActive = energyLevel < 30,
+                            modifier = Modifier.weight(1f)
+                        ) { energyLevel = 15f }
+
+                        VibePulseChip(
+                            label = if (isEnglish) "Moderate" else "适中",
+                            icon = Icons.Default.Coffee,
+                            color = Color(0xFF3F51B5),
+                            isActive = energyLevel >= 30 && energyLevel < 70,
+                            modifier = Modifier.weight(1f)
+                        ) { energyLevel = 50f }
+
+                        VibePulseChip(
+                            label = if (isEnglish) "Lively" else "热闹",
+                            icon = Icons.Default.Bolt,
+                            color = Color(0xFF9C27B0),
+                            isActive = energyLevel >= 70,
+                            modifier = Modifier.weight(1f)
+                        ) { energyLevel = 85f }
                     }
-                }
-            }
-        }
 
-        // Top Matches
-        if (recommendations.isNotEmpty()) {
-            item {
-                Text(
-                    text = if (isEnglish) "Top Vibe Matches" else "最佳氛围匹配",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
-            items(recommendations) { rec ->
-                RecommendationCard(rec, isEnglish)
-            }
-        }
-
-        // Recent Findings
-        if (vibeHistory.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isEnglish) "Recent Findings" else "最近发现",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                    Text(
-                        text = if (isEnglish) "Clear" else "清除",
-                        color = Color.Blue,
-                        fontSize = 14.sp,
-                        modifier = Modifier.clickable { viewModel.clearVibeHistory() }
-                    )
-                }
-            }
-            item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(15.dp),
-                    contentPadding = PaddingValues(bottom = 10.dp)
-                ) {
-                    items(vibeHistory) { rec ->
-                        Box(modifier = Modifier.width(280.dp)) {
-                            RecommendationCard(rec, isEnglish)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(filterChips) { chip ->
+                            Surface(
+                                color = energyColor.copy(alpha = 0.1f),
+                                shape = CircleShape,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, energyColor.copy(alpha = 0.2f)),
+                                modifier = Modifier.clickable {
+                                    val q = if (isEnglish) "Find a $chip place in CLT with $energyLevelLabel vibe" else "找带有 $chip 氛围的 $energyLevelLabel 地方"
+                                    viewModel.sendMessage(q)
+                                    scope.launch {
+                                        // Scroll to Expert Intel area (index 5)
+                                        listState.animateScrollToItem(5)
+                                    }
+                                }
+                            ) {
+                                Text(
+                                    text = chip,
+                                    color = energyColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Quick Search
-        item {
-            Text(
-                text = if (isEnglish) "Quick Search" else "快速搜索",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        }
-        items(sampleQuestions) { question ->
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { viewModel.sendMessage(question) },
-                shape = RoundedCornerShape(15.dp),
-                color = Color.White,
-                shadowElevation = 2.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = Color.Blue, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(text = question, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+            // 4. Latest Response
+            lastAIMessage?.let { msg ->
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isEnglish) "Expert Intel" else "专家分析",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                        }
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color.White.copy(alpha = 0.05f),
+                            shape = RoundedCornerShape(24.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                        ) {
+                            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                val displayText = msg.text.split("MATCH_SCORE_JSON")[0].trim()
+                                Text(
+                                    text = displayText,
+                                    fontSize = 15.sp,
+                                    lineHeight = 24.sp,
+                                    color = Color.White.copy(alpha = 0.95f)
+                                )
+
+                                // Visual Decision Cards
+                                msg.extraData?.let { extra ->
+                                    val type = extra["type"] as? String
+                                    Divider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
+                                    
+                                    when (type) {
+                                        "worth_it" -> WorthItScorecardView(data = extra, isEnglish = isEnglish)
+                                        "reality_check" -> RealityCheckDashboardView(data = extra, isEnglish = isEnglish)
+                                        "rent_analysis" -> RentAnalysisCardView(data = extra, isEnglish = isEnglish)
+                                        "the_scene" -> TheSceneDashboardView(data = extra, isEnglish = isEnglish)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
+
+            // 5. Matches
+            if (recommendations.isNotEmpty()) {
+                item {
+                    Text(
+                        text = if (isEnglish) "Top Matches" else "最佳匹配",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                }
+                items(recommendations) { rec ->
+                    RecommendationCard(rec, isEnglish)
+                }
+            }
+
+            // 6. Quick Search
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Column {
+                        Text(
+                            text = if (isEnglish) "Quick Search" else "快速搜索",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        Text(
+                            text = if (isEnglish) "Ask about safety, work, or investment." else "询问关于安全、工作或投资的问题。",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    sampleQuestions.forEach { question ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable { 
+                                var finalPrompt = question
+                                if (savedHomeAddress.isNotEmpty()) {
+                                    finalPrompt = finalPrompt.replace("[your address]", savedHomeAddress)
+                                                             .replace("[address]", savedHomeAddress)
+                                }
+                                viewModel.sendMessage(finalPrompt)
+                                // Scroll handled by LaunchedEffect(lastAIMessage)
+                            },
+                            color = Color.White.copy(alpha = 0.05f),
+                            shape = RoundedCornerShape(20.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(16.dp))
+                                Text(text = question, color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(80.dp)) }
         }
-        
-        item { Spacer(Modifier.height(50.dp)) }
+    }
+}
+
+@Composable
+fun VibePulseChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    isActive: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable { onClick() },
+        color = if (isActive) color.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isActive) color else Color.White.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isActive) Color.White else color.copy(alpha = 0.8f),
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                color = if (isActive) Color.White else Color.White.copy(alpha = 0.4f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
@@ -438,62 +729,72 @@ fun RecommendationCard(rec: Recommendation, isEnglish: Boolean) {
         else -> Color(0xFFF44336)
     }
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        color = Color.White.copy(alpha = 0.03f),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = rec.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(
-                    text = rec.reason,
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    maxLines = 2
+            // Photo
+            if (rec.imageUrl != null) {
+                AsyncImage(
+                    model = rec.imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
                 )
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    color = scoreColor.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(50.dp)
+            } else {
+                Box(
+                    modifier = Modifier.size(80.dp).background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Favorite, contentDescription = null, tint = scoreColor, modifier = Modifier.size(12.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = if (isEnglish) "${rec.score}% Vibe Match" else "${rec.score}% 匹配",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = scoreColor
-                        )
+                    Icon(Icons.Default.Place, contentDescription = null, tint = Color(0xFF007AFF))
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(text = rec.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    rec.price?.let {
+                        Text(text = it, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                
+                Text(text = rec.reason, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, maxLines = 2)
+                
+                Spacer(Modifier.height(8.dp))
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Score Badge
+                    Surface(color = scoreColor.copy(alpha = 0.1f), shape = CircleShape) {
+                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Verified, contentDescription = null, tint = scoreColor, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(text = if (isEnglish) "${rec.score}% Match" else "${rec.score}% 匹配", color = scoreColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Rating
+                    rec.rating?.let {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(text = it, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
-            
-            Spacer(Modifier.width(16.dp))
-            
+
             Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = rec.score / 100f,
-                    modifier = Modifier.size(50.dp),
-                    color = scoreColor,
-                    strokeWidth = 4.dp,
-                    trackColor = scoreColor.copy(alpha = 0.1f)
-                )
-                Text(
-                    text = "${rec.score}%",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = scoreColor
-                )
+                CircularProgressIndicator(progress = rec.score / 100f, modifier = Modifier.size(40.dp), color = scoreColor, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.1f))
+                Text(text = "${rec.score}%", color = scoreColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
+

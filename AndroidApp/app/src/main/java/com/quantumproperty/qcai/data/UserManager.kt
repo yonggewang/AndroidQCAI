@@ -110,12 +110,21 @@ class UserManager {
         auth.signOut()
     }
     
-    suspend fun getUserProfile(uid: String): UserProfile? {
+    suspend fun deleteAccount(): Result<Unit> {
         return try {
-            val snapshot = database.child("users").child(uid).get().await()
-            snapshot.getValue(UserProfile::class.java)
+            val user = auth.currentUser
+            if (user != null) {
+                val uid = user.uid
+                // Delete from Realtime Database
+                database.child("users").child(uid).removeValue().await()
+                // Delete from Firebase Auth
+                user.delete().await()
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("No user logged in"))
+            }
         } catch (e: Exception) {
-            null
+            Result.failure(e)
         }
     }
 }

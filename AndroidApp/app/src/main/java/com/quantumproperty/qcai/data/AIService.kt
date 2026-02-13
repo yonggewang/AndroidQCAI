@@ -25,7 +25,7 @@ class AIService {
     private val openAIEndpoint = "https://api.openai.com/v1/chat/completions"
     // Matching iOS endpoint
     private val geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-    private val geminiEmbedEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+    private val geminiEmbedEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
     private val pineconeEndpoint = "https://clt-vibe-rag-e13kol2.svc.aped-4627-b74a.pinecone.io/query"
     private val pineconeKey = "pcsk_7HuA7A_7T3VQ5Fuq6dTk6hwJPZedEJKU5Rk4pDk4PngnJstzMYSGzbpWJrwGaswWNUVNZj"
     private val vercelEndpoint = "https://vercel-backendcltai.vercel.app/api/analyze"
@@ -106,7 +106,29 @@ class AIService {
                 AITopic.LIFE -> "\nCurrent Mode: North Carolina Life Advisor."
                 AITopic.FINANCE_NEWS -> "\nCurrent Mode: Finance News Expert."
                 AITopic.MISC -> "\nCurrent Mode: Miscellaneous Information Assistant."
-                AITopic.CLT_VIBE -> "\nYou are the QCAI Concierge and Charlotte expert. You are an expert on Charlotte, NC. You know the CATS Blue Line schedule, trash pickup zones (Orange/Green weeks), and neighborhood boundaries. When providing recommendations, use the context provided to give specific names and vibes. If the user asks for places, try to format your response to include a 'MATCH_SCORE_JSON' block if possible."
+                AITopic.CLT_VIBE -> """
+                You are the QCAI Concierge for CHARLOTTE, NC (Queen City). Your goal is to provide precise, local, and actionable recommendations.
+                
+                【RESPONSE RULES】:
+                1. NO FILLER. Start directly with the answer.
+                2. Use the 【Local Context from RAG】 to provide specific details.
+                3. For every recommendation, you MUST provide: Name, Address, and a Vibe description.
+                4. You MUST end your response with a `MATCH_SCORE_JSON` block.
+                5. The JSON MUST include an "image_url" field (if available in the context).
+                
+                【JSON FORMAT EXAMPLE】:
+                MATCH_SCORE_JSON
+                [
+                  {
+                    "name": "Place Name",
+                    "score": 95,
+                    "reason": "Direct Vibe description...",
+                    "price": "$$",
+                    "rating": "4.5",
+                    "image_url": "https://..."
+                  }
+                ]
+                """.trimIndent()
                 AITopic.STOCK -> "\nCurrent Mode: Stock Analyst."
             }
         } else {
@@ -132,6 +154,7 @@ class AIService {
                 2. 必须基于【Local Context from RAG】事实回答。
                 3. 每条推荐必须包含具体的店名/地点、地址以及 Vibe 描述。
                 4. 回答末尾必须包含 MATCH_SCORE_JSON 块。
+                5. JSON 格式必须包含 "image_url" 字段 (如果 Context 中提供了图片链接，请务必填入)。
                 
                 请立即开始为您服务：
                 """.trimIndent()
@@ -172,7 +195,14 @@ class AIService {
                     val metadata = match.optJSONObject("metadata") ?: continue
                     val name = metadata.optString("name")
                     val desc = metadata.optString("description")
-                    contextStr.append("- $name: $desc\n")
+                    val img = metadata.optString("image_url")
+                    
+                    contextStr.append("- Name: $name\n")
+                    contextStr.append("  Description: $desc\n")
+                    if (img.isNotEmpty()) {
+                        contextStr.append("  Image: $img\n")
+                    }
+                    contextStr.append("\n")
                 }
                 return@withContext contextStr.toString()
             }
@@ -191,8 +221,9 @@ class AIService {
         content.put("parts", parts)
         
         val body = JSONObject()
-        body.put("model", "models/text-embedding-004")
+        body.put("model", "models/gemini-embedding-001")
         body.put("content", content)
+        body.put("output_dimensionality", 3072)
         
         val request = Request.Builder()
             .url(url)

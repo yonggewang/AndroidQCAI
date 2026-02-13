@@ -27,7 +27,10 @@ data class Recommendation(
     val id: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val score: Int,
-    val reason: String
+    val reason: String,
+    val price: String? = null,
+    val rating: String? = null,
+    val imageUrl: String? = null
 )
 
 
@@ -35,7 +38,8 @@ data class ChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
-    val isHidden: Boolean = false
+    val isHidden: Boolean = false,
+    val extraData: Map<String, Any>? = null
 )
 
 data class HotToolItem(

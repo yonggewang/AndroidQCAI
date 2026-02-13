@@ -198,7 +198,7 @@ fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: 
 
 @Composable
 fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
-    var symbol by remember { mutableStateOf("AAPL") }
+    var symbol by remember { mutableStateOf("GOOG") }
     var quote by remember { mutableStateOf<QuoteResponse?>(null) }
     var aiResponse by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -289,10 +289,7 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
             )
             Button(
                 onClick = {
-                    if (geminiKey.isEmpty()) {
-                        onOpenSettings()
-                        return@Button
-                    }
+
                     scope.launch {
                          try {
                              quote = RetrofitClient.api.getQuote(symbol)
@@ -370,10 +367,7 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                     // Deep Dive Analysis Button
                     TextButton(
                         onClick = {
-                            if (geminiKey.isEmpty()) {
-                                onOpenSettings()
-                                return@TextButton
-                            }
+
                             isLoading = true
                             scope.launch {
                                 try {
@@ -420,10 +414,7 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                 
                 Button(
                     onClick = {
-                        if (geminiKey.isEmpty()) {
-                            onOpenSettings()
-                            return@Button
-                        }
+
                         isLoading = true
                         scope.launch {
                             try {
@@ -569,10 +560,7 @@ fun PortfolioRiskView(geminiKey: String, onOpenSettings: () -> Unit) {
         Button(
             onClick = {
                 val holdings = holdingsInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                if (geminiKey.isEmpty()) {
-                    onOpenSettings()
-                    return@Button
-                }
+
                 if (holdings.isEmpty()) return@Button
                 
                 isLoading = true

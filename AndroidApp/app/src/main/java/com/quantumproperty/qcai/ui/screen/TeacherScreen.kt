@@ -70,8 +70,8 @@ val LightGrey = Color(0xFFF5F5F7)
 @Composable
 fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     val messages by viewModel.messages.collectAsState()
-    val showHotToolWebView by viewModel.showHotToolWebView.collectAsState()
-    val hotToolWebUrl by viewModel.hotToolWebUrl.collectAsState()
+    val showInAppBrowser by viewModel.showInAppBrowser.collectAsState()
+    val inAppBrowserUrl by viewModel.inAppBrowserUrl.collectAsState()
     val selectedTopic by viewModel.selectedTopic.collectAsState()
     val displayMode by viewModel.displayMode.collectAsState()
     val currentWebUrl by viewModel.currentWebUrl.collectAsState()
@@ -81,6 +81,10 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     // val showAddressInput by viewModel.showAddressInput.collectAsState()
     val showAPIKeySetup by viewModel.showAPIKeySetup.collectAsState()
     val context = LocalContext.current
+    
+    var showUserSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+    var showDeleteAccountConfirmation by remember { mutableStateOf(false) }
 
     val appLanguage by viewModel.appLanguage.collectAsState()
     val isEnglish = appLanguage == AppLanguage.ENGLISH
@@ -120,9 +124,9 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
         }
     }
 
-    if (showHotToolWebView && hotToolWebUrl != null) {
+    if (showInAppBrowser && inAppBrowserUrl != null) {
         Dialog(
-            onDismissRequest = { viewModel.closeHotTool() },
+            onDismissRequest = { viewModel.closeInAppBrowser() },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
@@ -136,15 +140,15 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                             IconButton(onClick = { viewModel.closeHotTool() }) {
+                             IconButton(onClick = { viewModel.closeInAppBrowser() }) {
                                  Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                              }
                              Text(
-                                 text = if (isEnglish) "Tool Viewer" else "工具浏览",
+                                 text = if (isEnglish) "Web Browser" else "网页浏览",
                                  style = MaterialTheme.typography.titleMedium,
                                  modifier = Modifier.weight(1f).padding(start = 16.dp)
                              )
-                             IconButton(onClick = { viewModel.closeHotTool() }) {
+                             IconButton(onClick = { viewModel.closeInAppBrowser() }) {
                                  Icon(Icons.Default.Close, contentDescription = "Close")
                              }
                         }
@@ -160,31 +164,21 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
                                 settings.javaScriptEnabled = true
-                                webViewClient = object : WebViewClient() {
-                                    override fun shouldOverrideUrlLoading(
-                                        view: WebView?,
-                                        request: WebResourceRequest?
-                                    ): Boolean {
-                                        val url = request?.url?.toString()
-                                        if (url != null) {
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                view?.context?.startActivity(intent)
-                                                return true
-                                            } catch (e: Exception) {
-                                                e.printStackTrace()
-                                            }
-                                        }
-                                        return false
-                                    }
-                                }
-                                loadUrl(hotToolWebUrl!!)
+                                 webViewClient = object : WebViewClient() {
+                                     override fun shouldOverrideUrlLoading(
+                                         view: WebView?,
+                                         request: WebResourceRequest?
+                                     ): Boolean {
+                                         // Allow navigation within the in-app browser
+                                         return false
+                                     }
+                                 }
+                                 loadUrl(inAppBrowserUrl!!)
                             }
                         },
                         update = { view ->
                              // Ensure we can go back if user navigates within the webview
-                             view.tag = "HotToolWebView" 
+                             view.tag = "InAppBrowser" 
                         }
                     )
                     } // End Box
@@ -296,6 +290,22 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 RentalsScreen(
                     userProfile = userProfile,
                     onBack = { viewModel.closeRentalsView() }
+                )
+            }
+        }
+    }
+
+    val showTheSceneView by viewModel.showTheSceneView.collectAsState()
+    if (showTheSceneView) {
+        Dialog(
+            onDismissRequest = { viewModel.closeTheSceneView() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                TheSceneScreen(
+                    viewModel = viewModel,
+                    isEnglish = isEnglish,
+                    onBack = { viewModel.closeTheSceneView() }
                 )
             }
         }
@@ -433,16 +443,9 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                         onDismissRequest = { showAIAndToolsMenu = false }
                     ) {
                         // Category 1: AI API Key Settings
-                        DropdownMenuItem(
-                            text = { Text(if (isEnglish) "AI API Key Settings" else "AI 设置") },
-                            onClick = {
-                                showAIAndToolsMenu = false
-                                viewModel.openAPIKeySetup()
-                            },
-                            leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null) }
-                        )
+                        // Category 1: AI API Key Settings (Removed as backend handles keys)
                         
-                        Divider()
+
                         
                         // Category: Community Features
                         Text(
@@ -510,12 +513,11 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                             )
                             userTools.forEach { item ->
-                                val label = if (isEnglish) item.englishName else item.chineseName
                                 DropdownMenuItem(
-                                    text = { Text(label) },
+                                    text = { Text(if (isEnglish) item.englishName else item.chineseName) },
                                     onClick = {
                                         showAIAndToolsMenu = false
-                                        viewModel.openHotTool(item.url)
+                                        viewModel.openInAppBrowser(item.url)
                                     },
                                     leadingIcon = { Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 )
@@ -547,7 +549,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 Spacer(Modifier.width(8.dp))
                 
                 // User Profile Menu (Previously Left, Moved to Right)
-                var showUserProfileMenu by remember { mutableStateOf(false) }
+                // var showUserProfileMenu by remember { mutableStateOf(false) } (replaced by showUserSheet)
                 // val isLoggedIn by viewModel.isLoggedIn.collectAsState() // Moved to top
                 // val userName by viewModel.userName.collectAsState() // Moved to top
 
@@ -561,72 +563,55 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                    Spacer(Modifier.width(8.dp))
                 }
 
+                if (showUserSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showUserSheet = false },
+                        sheetState = sheetState,
+                        containerColor = Color.White,
+                        dragHandle = { BottomSheetDefaults.DragHandle() }
+                    ) {
+                        UserQuickSettingsSheet(
+                            viewModel = viewModel,
+                            isEnglish = isEnglish,
+                            onDismiss = { showUserSheet = false },
+                            onDeleteClick = { showDeleteAccountConfirmation = true }
+                        )
+                    }
+                }
+
+                if (showDeleteAccountConfirmation) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteAccountConfirmation = false },
+                        title = { Text(if (isEnglish) "Delete Account?" else "确认注销？") },
+                        text = { Text(if (isEnglish) "This action cannot be undone. All your data will be permanently deleted." else "此操作无法撤销。您的所有数据将被永久删除。") },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    viewModel.deleteAccount()
+                                    showDeleteAccountConfirmation = false
+                                    showUserSheet = false
+                                }
+                            ) {
+                                Text(if (isEnglish) "Delete" else "确认注销", color = Color.Red)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteAccountConfirmation = false }) {
+                                Text(if (isEnglish) "Cancel" else "取消")
+                            }
+                        }
+                    )
+                }
+
                 Box {
                     IconButton(
-                        onClick = { showUserProfileMenu = true },
+                        onClick = { showUserSheet = true },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.AccountCircle,
                             contentDescription = "User Profile",
                             tint = if (isLoggedIn) PrimaryPurple else Color.Gray
-                        )
-                    }
-                    
-                    DropdownMenu(
-                        expanded = showUserProfileMenu,
-                        onDismissRequest = { showUserProfileMenu = false }
-                    ) {
-                        if (isLoggedIn) {
-                            DropdownMenuItem(
-                                text = { Text(userName) },
-                                onClick = { showUserProfileMenu = false },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Reset Conversation" else "重置对话") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.resetConversation() 
-                                },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
-                            )
-                            Divider()
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Logout" else "退出登录") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.logout() 
-                                },
-                                leadingIcon = { Icon(Icons.Default.ExitToApp, contentDescription = null) }
-                            )
-                        } else {
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Login" else "登录") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.openLogin() 
-                                },
-                                leadingIcon = { Icon(Icons.Default.Login, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isEnglish) "Register" else "注册") },
-                                onClick = { 
-                                    showUserProfileMenu = false
-                                    viewModel.openRegister()
-                                },
-                                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) }
-                            )
-                        }
-                        
-                        Divider()
-                        DropdownMenuItem(
-                            text = { Text(if (isEnglish) "Settings" else "设置") },
-                            onClick = { 
-                                showUserProfileMenu = false
-                                    viewModel.openSettings() 
-                            },
-                            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
                         )
                     }
                 }
@@ -703,9 +688,6 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     selectedTopic == AITopic.STOCK -> {
                         StockScreen(onOpenSettings = { viewModel.openAPIKeySetup() })
                     }
-                    displayMode == DisplayMode.SETTINGS -> {
-                        SettingsScreen(viewModel)
-                    }
                     displayMode == DisplayMode.WEB && currentWebUrl != null -> {
                         Column(modifier = Modifier.fillMaxSize()) {
                             AndroidView(
@@ -718,25 +700,20 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                         settings.javaScriptEnabled = true
                                         settings.domStorageEnabled = true
                                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                        webViewClient = object : WebViewClient() {
-                                            override fun shouldOverrideUrlLoading(
-                                                view: WebView?,
-                                                request: WebResourceRequest?
-                                            ): Boolean {
-                                                val url = request?.url?.toString()
-                                                if (url != null) {
-                                                    try {
-                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        view?.context?.startActivity(intent)
-                                                        return true
-                                                    } catch (e: Exception) {
-                                                        e.printStackTrace()
-                                                    }
-                                                }
-                                                return false
-                                            }
-                                        }
+                                         webViewClient = object : WebViewClient() {
+                                             override fun shouldOverrideUrlLoading(
+                                                 view: WebView?,
+                                                 request: WebResourceRequest?
+                                             ): Boolean {
+                                                 val url = request?.url?.toString()
+                                                 if (url != null) {
+                                                     // Intercept external links and open in the in-app pop-up
+                                                     viewModel.openInAppBrowser(url)
+                                                     return true
+                                                 }
+                                                 return false
+                                             }
+                                         }
                                         loadUrl(currentWebUrl!!)
                                     }
                                 },
@@ -832,122 +809,262 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
 }
 
 @Composable
-fun SettingsScreen(viewModel: TeacherViewModel) {
+fun UserQuickSettingsSheet(
+    viewModel: TeacherViewModel,
+    isEnglish: Boolean,
+    onDismiss: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val userName by viewModel.userName.collectAsState()
-    val appLanguage by viewModel.appLanguage.collectAsState()
-    val isEnglish = appLanguage == AppLanguage.ENGLISH
+    val isSpeechEnabled by viewModel.isSpeechEnabled.collectAsState()
+    val speechRate by viewModel.speechRate.collectAsState()
+    val speechPitch by viewModel.speechPitch.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF2F2F7)) // System Grouped Background
+            .fillMaxWidth()
             .padding(16.dp)
+            .padding(bottom = 32.dp)
     ) {
-        Text(
-            if (isEnglish) "Settings" else "设置",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
-        // User Center Section
-        Text(if (isEnglish) "User Center" else "用户中心", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Card(
+        // Header
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                if (isLoggedIn) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(48.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            color = PrimaryPurple.copy(alpha = 0.1f)
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.padding(8.dp),
-                                tint = PrimaryPurple
-                            )
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            val userProfile by viewModel.userProfile.collectAsState()
-                            val vipLevel = userProfile?.vipLevel ?: 1
-                            val vipText = if (vipLevel >= 99) "Root Admin" else "VIP Level $vipLevel"
-                            Text(vipText, style = MaterialTheme.typography.bodySmall, color = PrimaryPurple)
-                        }
-                        TextButton(onClick = { viewModel.logout() }) {
-                            Text(if (isEnglish) "Logout" else "退出登录", color = Color.Red)
-                        }
-                    }
-                } else {
-                    Text(if (isEnglish) "Not Logged In" else "您尚未登录", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(
-                            onClick = { viewModel.openLogin() },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(if (isEnglish) "Login" else "用户登录")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.openRegister() },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(if (isEnglish) "Register" else "用户注册")
-                        }
-                    }
-                }
+            Text(
+                if (isEnglish) "Account" else "账户信息",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Close")
             }
         }
-        
-        // VIP Settings (Speaker)
-        val userProfile by viewModel.userProfile.collectAsState()
-        val vipLevel = userProfile?.vipLevel ?: 0
-        if (vipLevel >= 1) {
-            Spacer(Modifier.height(24.dp))
-            Text(if (isEnglish) "VIP Settings" else "VIP 设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
+
+        Spacer(Modifier.height(16.dp))
+
+        if (isLoggedIn) {
+            // User info card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8))
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    val rate by viewModel.speechRate.collectAsState()
-                    val pitch by viewModel.speechPitch.collectAsState()
-                    
-                    Text(if (isEnglish) "Speech Rate: ${String.format("%.1f", rate)}x" else "语速: ${String.format("%.1f", rate)}x")
-                    Slider(
-                        value = rate,
-                        onValueChange = { viewModel.setSpeechRate(it) },
-                        valueRange = 0.5f..2.0f
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = PrimaryPurple
                     )
-                    
-                    Spacer(Modifier.height(8.dp))
-                    
-                    Text(if (isEnglish) "Speech Pitch: ${String.format("%.1f", pitch)}" else "语调: ${String.format("%.1f", pitch)}")
-                    Slider(
-                        value = pitch,
-                        onValueChange = { viewModel.setSpeechPitch(it) },
-                        valueRange = 0.5f..2.0f
-                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        val vipLevel = userProfile?.vipLevel ?: 1
+                        val levelText = if (vipLevel >= 99) "Root Admin" else "VIP Level $vipLevel"
+                        Text(levelText, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
                 }
             }
         }
 
+        Spacer(Modifier.height(24.dp))
+
+        // Settings Group (Visible for all)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            shadowElevation = 2.dp,
+            color = Color.White
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Auto-Read Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (isSpeechEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                            contentDescription = null,
+                            tint = if (isSpeechEnabled) PrimaryPurple else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(if (isEnglish) "Auto-Read" else "自动朗读", fontWeight = FontWeight.Medium)
+                    }
+                Switch(
+                    checked = isSpeechEnabled,
+                    onCheckedChange = { viewModel.toggleSpeech() },
+                    colors = SwitchDefaults.colors(checkedThumbColor = PrimaryPurple)
+                )
+            }
+
+            Divider(Modifier.padding(vertical = 12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Speech Rate
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(if (isEnglish) "Rate" else "语速", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("%.1f".format(speechRate), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = speechRate,
+                        onValueChange = { viewModel.updateSpeechConfig(rate = it, pitch = speechPitch) },
+                        valueRange = 0.1f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = PrimaryPurple, activeTrackColor = PrimaryPurple)
+                    )
+                }
+
+                // Speech Pitch
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(if (isEnglish) "Pitch" else "语调", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("%.1f".format(speechPitch), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = speechPitch,
+                        onValueChange = { viewModel.updateSpeechConfig(rate = speechRate, pitch = it) },
+                        valueRange = 0.5f..2.0f,
+                        colors = SliderDefaults.colors(thumbColor = PrimaryPurple, activeTrackColor = PrimaryPurple)
+                    )
+                }
+            }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        if (isLoggedIn) {
+            // Actions
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+            ) {
+                SettingsActionItem(
+                    icon = Icons.Default.Refresh,
+                    text = if (isEnglish) "Reset Conversation" else "清空对话",
+                    color = Color.Red,
+                    onClick = {
+                        viewModel.resetConversation()
+                        onDismiss()
+                    }
+                )
+                Divider()
+                SettingsActionItem(
+                    icon = Icons.Default.PersonRemove,
+                    text = if (isEnglish) "Delete Account" else "注销账号",
+                    color = Color.Red,
+                    onClick = onDeleteClick
+                )
+                Divider()
+                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                SettingsActionItem(
+                    icon = Icons.Default.QuestionMark,
+                    text = if (isEnglish) "Help & Support" else "帮助与支持",
+                    onClick = {
+                        val helpUrl = if (isEnglish) "https://www.queencityai.net" else "https://www.queencityai.net/static/index_cn.html"
+                        viewModel.openInAppBrowser(helpUrl)
+                        onDismiss()
+                    }
+                )
+                Divider()
+                SettingsActionItem(
+                    icon = Icons.Default.ExitToApp,
+                    text = if (isEnglish) "Logout" else "退出登录",
+                    color = Color.Red,
+                    onClick = {
+                        viewModel.logout()
+                        onDismiss()
+                    }
+                )
+            }
+        } else {
+            // Guest View
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    if (isEnglish) "You are a guest. Please log in to view more content." else "您是访客。请登录以查看更多有价值的内容。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                )
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = {
+                        onDismiss()
+                        viewModel.openLogin()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Login, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isEnglish) "Log In" else "登录账户")
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        viewModel.openRegister()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.PersonAdd, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isEnglish) "Create Account" else "立即注册")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsActionItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    text: String,
+    color: Color = Color.Black,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.White
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(16.dp))
+            }
+            Text(text, color = color, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray)
+        }
     }
 }
 
@@ -1200,11 +1317,25 @@ fun MessageBubble(msg: ChatMessage) {
             color = if (msg.isUser) Color(0xFFE3F2FD) else Color(0xFFE8F5E9),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(
-                text = msg.text,
-                modifier = Modifier.padding(12.dp),
-                color = Color.Black
-            )
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = msg.text,
+                    color = Color.Black
+                )
+
+                // Render Decision Engine Cards if extraData is present
+                msg.extraData?.let { extra ->
+                    val type = extra["type"] as? String
+                    Divider(color = Color.Black.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 4.dp))
+                    
+                    when (type) {
+                        "worth_it" -> WorthItScorecardView(data = extra, isEnglish = isEnglish)
+                        "reality_check" -> RealityCheckDashboardView(data = extra, isEnglish = isEnglish)
+                        "rent_analysis" -> RentAnalysisCardView(data = extra, isEnglish = isEnglish)
+                        "the_scene" -> TheSceneDashboardView(data = extra, isEnglish = isEnglish)
+                    }
+                }
+            }
         }
     }
 }
