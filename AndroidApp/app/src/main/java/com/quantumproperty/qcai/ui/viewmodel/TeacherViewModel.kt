@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 
 enum class DisplayMode {
@@ -47,11 +48,30 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _topMenuItems = MutableStateFlow<List<TopMenuItem>>(emptyList())
     val topMenuItems = _topMenuItems.asStateFlow()
 
+    private val _isAutoPlayNews = MutableStateFlow(false)
+    val isAutoPlayNews = _isAutoPlayNews.asStateFlow()
+
+    fun setAutoPlayNews(enabled: Boolean) {
+        _isAutoPlayNews.value = enabled
+        if (!enabled) {
+            stopNewsSummary()
+        }
+    }
+    private var lastPlaybackStartTime: Long = 0
+
     private val _selectedTopic = MutableStateFlow(AITopic.CLT_VIBE)
     val selectedTopic = _selectedTopic.asStateFlow()
 
     private val _displayMode = MutableStateFlow(DisplayMode.WEB)
     val displayMode = _displayMode.asStateFlow()
+
+    // Tab Navigation State (0: Home, 1: Vibe, 2: Hub, 3: Toolkit, 4: More)
+    private val _selectedTab = MutableStateFlow(0)
+    val selectedTab = _selectedTab.asStateFlow()
+
+    fun setSelectedTab(index: Int) {
+        _selectedTab.value = index
+    }
 
     private val _currentWebUrl = MutableStateFlow<String?>(null)
     val currentWebUrl = _currentWebUrl.asStateFlow()
@@ -79,6 +99,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _showLoginDialog = MutableStateFlow(false)
     val showLoginDialog = _showLoginDialog.asStateFlow()
+    private val _showProfileDialog = MutableStateFlow(false)
+    val showProfileDialog = _showProfileDialog.asStateFlow()
 
     private val _showRegisterDialog = MutableStateFlow(false)
     val showRegisterDialog = _showRegisterDialog.asStateFlow()
@@ -98,12 +120,6 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
             emptyList()
         }
     }
-
-    private val _showInAppBrowser = MutableStateFlow(false)
-    val showInAppBrowser = _showInAppBrowser.asStateFlow()
-
-    private val _inAppBrowserUrl = MutableStateFlow<String?>(null)
-    val inAppBrowserUrl = _inAppBrowserUrl.asStateFlow()
 
     private val _recommendations = MutableStateFlow<List<Recommendation>>(emptyList())
     val recommendations = _recommendations.asStateFlow()
@@ -129,6 +145,275 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     
     private val _sceneData = MutableStateFlow<com.quantumproperty.qcai.data.SceneResponse?>(null)
     val sceneData = _sceneData.asStateFlow()
+
+    // AI Roadmap
+    private val _showAIRoadmapView = MutableStateFlow(false)
+    val showAIRoadmapView = _showAIRoadmapView.asStateFlow()
+
+    private val _aiRoadmapResponse = MutableStateFlow<com.quantumproperty.qcai.data.SurveyResponse?>(null)
+    val aiRoadmapResponse = _aiRoadmapResponse.asStateFlow()
+
+    fun openAIRoadmap(context: android.content.Context) {
+        val url = when (_appLanguage.value) {
+            AppLanguage.CHINESE -> "https://quantumpropertyllc.github.io/aihardware/aistrategy_CN.html"
+            AppLanguage.SPANISH -> "https://quantumpropertyllc.github.io/aihardware/aistrategy_ES.html"
+            else -> "https://quantumpropertyllc.github.io/aihardware/aistrategy.html"
+        }
+        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+    }
+
+    fun closeAIRoadmap() {
+        _showAIRoadmapView.value = false
+        _aiRoadmapResponse.value = null // Clear state to allow retaking survey next time
+    }
+
+    fun submitAISurvey(response: com.quantumproperty.qcai.data.SurveyResponse) {
+        _aiRoadmapResponse.value = response
+    }
+
+
+
+    private val _dailyBriefEN = MutableStateFlow<com.quantumproperty.qcai.data.DailyBriefResponse?>(null)
+    private val _dailyBriefCN = MutableStateFlow<com.quantumproperty.qcai.data.DailyBriefResponse?>(null)
+    private val _dailyBriefES = MutableStateFlow<com.quantumproperty.qcai.data.DailyBriefResponse?>(null)
+
+    val currentDailyBrief = combine(_appLanguage, _dailyBriefEN, _dailyBriefCN, _dailyBriefES) { lang, en, cn, es ->
+        when (lang) {
+            AppLanguage.CHINESE -> cn
+            AppLanguage.SPANISH -> es
+            else -> en
+        }
+    }
+
+    private val _dailyBrief = MutableStateFlow<com.quantumproperty.qcai.data.DailyBriefResponse?>(null)
+    val dailyBrief = _dailyBrief.asStateFlow()
+
+    private val _aiNewsArticles = MutableStateFlow<List<com.quantumproperty.qcai.data.AINewsArticle>>(emptyList())
+    val aiNewsArticles = _aiNewsArticles.asStateFlow()
+
+    private val _verifiedProfessionals = MutableStateFlow<List<com.quantumproperty.qcai.data.Professional>>(emptyList())
+    val verifiedProfessionals = _verifiedProfessionals.asStateFlow()
+
+    fun fetchHardwareCatalog() {
+        viewModelScope.launch {
+            com.quantumproperty.qcai.data.HardwareCatalogService.shared.fetchCatalog()
+            _verifiedProfessionals.value = com.quantumproperty.qcai.data.HardwareCatalogService.shared.professionals
+        }
+    }
+
+    fun openProfessionalProfile(context: android.content.Context, id: String? = null) {
+        val url = if (id != null) {
+            "https://quantumpropertyllc.github.io/aihardware/pro.html?id=$id"
+        } else {
+            "https://quantumpropertyllc.github.io/aihardware/pro.html"
+        }
+        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+    }
+
+    fun fetchDailyBrief(force: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                // Fetch all 3 in parallel
+                launch {
+                    try {
+                        _dailyBriefEN.value = com.quantumproperty.qcai.data.CityOSService.instance.fetchDailyBrief(language = "en", forceRefresh = force)
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+                launch {
+                    try {
+                        _dailyBriefCN.value = com.quantumproperty.qcai.data.CityOSService.instance.fetchDailyBrief(language = "cn", forceRefresh = force)
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+                launch {
+                    try {
+                        _dailyBriefES.value = com.quantumproperty.qcai.data.CityOSService.instance.fetchDailyBrief(language = "es", forceRefresh = force)
+                    } catch (e: Exception) { e.printStackTrace() }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    fun fetchAINewsArticles() {
+        viewModelScope.launch {
+            try {
+                val langCode = when (_appLanguage.value) {
+                    AppLanguage.CHINESE -> "zh"
+                    AppLanguage.SPANISH -> "es"
+                    else -> "en"
+                }
+                _aiNewsArticles.value = com.quantumproperty.qcai.data.CityOSService.instance.fetchAINewsArticles(langCode)
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    private val _showNewsLocalLifeView = MutableStateFlow(false)
+    val showNewsLocalLifeView = _showNewsLocalLifeView.asStateFlow()
+
+    fun openNewsLocalLife() {
+        _showNewsLocalLifeView.value = true
+    }
+
+    fun closeNewsLocalLife() {
+        _showNewsLocalLifeView.value = false
+    }
+
+    fun openTheScene() {
+        _showTheSceneView.value = true
+    }
+
+    fun closeTheScene() {
+        _showTheSceneView.value = false
+    }
+
+    // Play summary for specific items (News & Local Life)
+    private var newsSummaryItems: List<TopMenuItem> = emptyList()
+    private var newsSummaryIndex = 0
+    private val _isNewsSummaryReading = MutableStateFlow(false)
+    val isNewsSummaryReading = _isNewsSummaryReading.asStateFlow()
+
+    fun playNewsSummary(items: List<TopMenuItem>) {
+        if (_isNewsSummaryReading.value) {
+            stopNewsSummary()
+            return
+        }
+
+        if (ttsManager?.isReady() != true) {
+             val isChinese = _appLanguage.value == AppLanguage.CHINESE
+             showError(if (isChinese) "语音服务未就绪" else "TTS Service Not Ready")
+             return
+        }
+
+        stopSequentialListen() // Stop generic listener if active
+        ttsManager?.stop()
+
+        newsSummaryItems = items
+        newsSummaryIndex = 0
+        _isNewsSummaryReading.value = true
+        
+        // Listen for completion
+        ttsManager?.onSpeechCompleted = { id ->
+            if (_isNewsSummaryReading.value) {
+                 if (id == "NEWS_ITEM_DONE_$newsSummaryIndex") {
+                    viewModelScope.launch {
+                        newsSummaryIndex++
+                        if (newsSummaryIndex < newsSummaryItems.size) {
+                             readNextNewsSummaryItem()
+                        } else {
+                            _isNewsSummaryReading.value = false
+                        }
+                    }
+                 }
+            }
+        }
+        
+        readNextNewsSummaryItem()
+        lastPlaybackStartTime = System.currentTimeMillis()
+    }
+
+    fun stopNewsSummaryGracefully() {
+        val now = System.currentTimeMillis()
+        if (now - lastPlaybackStartTime > 3000) {
+            stopNewsSummary()
+        }
+    }
+
+    private fun stripHTML(html: String): String {
+        return try {
+            // First replace typical block wrappers with newline markers so Jsoup text() doesn't merge them
+            val preprocessed = html
+                .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+                .replace(Regex("</p>", RegexOption.IGNORE_CASE), "\n\n")
+                .replace(Regex("</div>", RegexOption.IGNORE_CASE), "\n")
+                .replace(Regex("</li>", RegexOption.IGNORE_CASE), "\n")
+                
+            val doc = org.jsoup.Jsoup.parse(preprocessed)
+            // Remove scripts, styles, etc.
+            doc.select("script, style, head, iframe, noscript, svg").remove()
+            
+            // Jsoup.wholeText() preserves existing text nodes' newlines
+            val text = doc.wholeText()
+                .replace(Regex("<[^>]+>"), " ")
+                .replace("&nbsp;", " ")
+                .replace(Regex("[ \\t]+"), " ")
+                .replace(Regex("\\n\\s+"), "\n")
+                .replace(Regex("\\n{3,}"), "\n\n")
+                .trim()
+            text
+        } catch (e: Exception) {
+            html.replace(Regex("<!--[\\s\\S]*?-->"), " ")
+                .replace(Regex("<script[\\s\\S]*?<\\/script>", RegexOption.IGNORE_CASE), " ")
+                .replace(Regex("<style[\\s\\S]*?<\\/style>", RegexOption.IGNORE_CASE), " ")
+                .replace(Regex("<[^>]+>"), " ")
+                .replace("&nbsp;", " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        }
+    }
+
+    fun stopNewsSummary() {
+        _isNewsSummaryReading.value = false
+        ttsManager?.stop()
+        _isLoading.value = false
+    }
+
+    private fun readNextNewsSummaryItem() {
+        if (newsSummaryIndex >= newsSummaryItems.size) return
+        
+        val item = newsSummaryItems[newsSummaryIndex]
+        val isChinese = _appLanguage.value == AppLanguage.CHINESE
+        val isSpanish = _appLanguage.value == AppLanguage.SPANISH
+        val url = if (isChinese) item.chineseUrl else if (isSpanish && item.spanishUrl.isNotEmpty()) item.spanishUrl else item.englishUrl
+        
+        if (url.isEmpty()) {
+             // Skip if no URL
+             newsSummaryIndex++
+             readNextNewsSummaryItem()
+             return
+        }
+
+        val title = if (isChinese) item.chineseName else item.englishName
+        val intro = "$title. \n\n"
+        
+        _isLoading.value = true
+        ttsManager?.speak(intro, null, android.speech.tts.TextToSpeech.QUEUE_FLUSH) // Flush to start fresh
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val doc = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
+                    .timeout(10000)
+                    .get()
+                
+                // Improved summary extraction
+                val summaryText = stripHTML(doc.html())
+                
+                // Take first 1000 chars for a meaningful but not infinite summary
+                val summary = if (summaryText.length > 1000) {
+                    summaryText.substring(0, 1000) + "..."
+                } else {
+                    summaryText
+                }
+                
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = false
+                    if (summary.isNotBlank()) {
+                         ttsManager?.speak(summary, "NEWS_ITEM_DONE_$newsSummaryIndex", android.speech.tts.TextToSpeech.QUEUE_ADD)
+                    } else {
+                         // Skip if no content extracted
+                         newsSummaryIndex++
+                         readNextNewsSummaryItem()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = false
+                    // Skip on error
+                    newsSummaryIndex++
+                    readNextNewsSummaryItem()
+                }
+            }
+        }
+    }
 
     private val _speechRate = MutableStateFlow(1.0f)
     val speechRate = _speechRate.asStateFlow()
@@ -163,6 +448,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         // Initial URL setup
         updateDisplayMode(AITopic.CLT_VIBE)
         refreshHotToolList()
+        fetchHardwareCatalog()
         
         // Robust fetch with retry for startup
         viewModelScope.launch {
@@ -378,7 +664,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
 
         // Update TTS language
-        val locale = if (language == AppLanguage.CHINESE) java.util.Locale.SIMPLIFIED_CHINESE else java.util.Locale.US
+        val locale = when (language) {
+            AppLanguage.CHINESE -> java.util.Locale.SIMPLIFIED_CHINESE
+            AppLanguage.SPANISH -> java.util.Locale("es", "ES")
+            else -> java.util.Locale.US
+        }
         val ttsSuccess = ttsManager?.setLanguage(locale) ?: false
         
         if (!ttsSuccess && language == AppLanguage.CHINESE) {
@@ -388,6 +678,18 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
              // Don't revert UI language because user might still want to read text, but warn about Audio
              _errorMessage.value = msg
         }
+        
+        // Refresh News with new language
+        fetchAINewsArticles()
+    }
+
+    fun cycleLanguage() {
+        val next = when (_appLanguage.value) {
+            AppLanguage.ENGLISH -> AppLanguage.SPANISH
+            AppLanguage.SPANISH -> AppLanguage.CHINESE
+            AppLanguage.CHINESE -> AppLanguage.ENGLISH
+        }
+        setLanguage(next)
     }
 
     fun setTopic(topic: AITopic) {
@@ -398,6 +700,18 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _selectedTopic.value = topic
         ttsManager?.stop()
         updateDisplayMode(topic)
+
+        // Auto Play Logic
+        if (_isAutoPlayNews.value) {
+            val newsTopics = listOf(AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS)
+            if (newsTopics.contains(topic)) {
+                // Find the menu item for this topic to get title/url
+                val item = _topMenuItems.value.find { it.topic == topic }
+                if (item != null) {
+                    playNewsSummary(listOf(item))
+                }
+            }
+        }
     }
     
     fun setEngine(engine: AIEngine) {
@@ -447,6 +761,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun closeRegister() {
         _showRegisterDialog.value = false
+    }
+
+    fun openProfile() {
+        _showProfileDialog.value = true
+    }
+
+    fun closeProfile() {
+        _showProfileDialog.value = false
     }
 
     fun performLogin(email: String, pass: String) {
@@ -537,14 +859,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun updateDisplayMode(topic: AITopic) {
-        val isEnglish = _appLanguage.value == AppLanguage.ENGLISH
+        val language = _appLanguage.value
+        val isChinese = language == AppLanguage.CHINESE
         
         // Match by topic directly
         val dynamicItem = _topMenuItems.value.find { it.topic == topic }
 
         if (dynamicItem != null && topic != AITopic.CLT_VIBE) {
             _displayMode.value = DisplayMode.WEB
-            _currentWebUrl.value = if (isEnglish) dynamicItem.englishUrl else dynamicItem.chineseUrl
+            _currentWebUrl.value = if (isChinese) dynamicItem.chineseUrl else dynamicItem.englishUrl
         } else {
             // Fallback to hardcoded URLs if not found in dynamic menu
             when (topic) {
@@ -558,15 +881,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 }
                 AITopic.AI_ANALYSIS -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = if (isEnglish) "https://quantumpropertyllc.github.io/news/ainews.html" else "https://quantumpropertyllc.github.io/news/ainews_cn.html"
+                    _currentWebUrl.value = if (isChinese) "https://quantumpropertyllc.github.io/news/ainews_cn.html" else "https://quantumpropertyllc.github.io/news/ainews.html"
                 }
                 AITopic.WORLD_NEWS -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = if (isEnglish) "https://quantumpropertyllc.github.io/news/topnews.html" else "https://quantumpropertyllc.github.io/news/topnews_cn.html"
+                    _currentWebUrl.value = if (isChinese) "https://quantumpropertyllc.github.io/news/topnews_cn.html" else "https://quantumpropertyllc.github.io/news/topnews.html"
                 }
                 AITopic.FINANCE_NEWS -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = if (isEnglish) "https://quantumpropertyllc.github.io/news/money.html" else "https://quantumpropertyllc.github.io/news/money_cn.html"
+                    _currentWebUrl.value = if (isChinese) "https://quantumpropertyllc.github.io/news/money_cn.html" else "https://quantumpropertyllc.github.io/news/money.html"
                 }
                 AITopic.MISC -> {
                     _displayMode.value = DisplayMode.WEB
@@ -580,15 +903,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     _displayMode.value = DisplayMode.WEB
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
                 }
-                AITopic.CLT_VIBE -> {
+                AITopic.CLT_VIBE, AITopic.STOCK, AITopic.NONE -> {
                     _displayMode.value = DisplayMode.CHAT
                 }
-                AITopic.STOCK -> {
-                    _displayMode.value = DisplayMode.CHAT
-                }
-
-                // else branch removed as all enum cases are covered or will be covered
-                // The 'when' is exhaustive.
             }
         }
         
@@ -639,7 +956,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             try {
-                var responseText = " "
+                var responseText: String
                 var extraData: Map<String, Any>? = null
 
                 // Route ALL queries through backend (backend has server-side Gemini keys)
@@ -743,6 +1060,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     
     fun stopSequentialListen() {
          isSequentialReading = false
+         _isNewsSummaryReading.value = false
          ttsManager?.stop()
     }
     
@@ -1024,16 +1342,6 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun openInAppBrowser(url: String) {
-        _inAppBrowserUrl.value = url
-        _showInAppBrowser.value = true
-    }
-
-    fun closeInAppBrowser() {
-        _showInAppBrowser.value = false
-        _inAppBrowserUrl.value = null
-    }
-    
     // Community Features Navigation
     fun showEventsView() {
         _showEventsView.value = true

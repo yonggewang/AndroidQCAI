@@ -12,8 +12,8 @@ android {
         applicationId = "com.quantumproperty.qcai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.1.5"
+        versionCode = 11
+        versionName = "1.1.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -105,4 +105,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-messaging")  // Required for FirebaseMessagingService
+    
+    // In-App Browser Support
+    implementation("androidx.browser:browser:1.8.0")
 }

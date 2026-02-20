@@ -3,9 +3,10 @@ package com.quantumproperty.qcai
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.quantumproperty.qcai.ui.screen.TeacherScreen
+import com.quantumproperty.qcai.ui.screen.MainScreen
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.*
 
 import android.Manifest
 import android.os.Build
@@ -57,9 +58,22 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sharedPreferences = context.getSharedPreferences("qcai_prefs", android.content.Context.MODE_PRIVATE)
+            var hasCompletedOnboarding by remember {
+                mutableStateOf(sharedPreferences.getBoolean("hasCompletedOnboarding", false))
+            }
+            
             MaterialTheme {
                 Surface {
-                    TeacherScreen()
+                    if (hasCompletedOnboarding) {
+                        MainScreen()
+                    } else {
+                        com.quantumproperty.qcai.ui.screen.WelcomeScreen {
+                            sharedPreferences.edit().putBoolean("hasCompletedOnboarding", true).apply()
+                            hasCompletedOnboarding = true
+                        }
+                    }
                 }
             }
         }

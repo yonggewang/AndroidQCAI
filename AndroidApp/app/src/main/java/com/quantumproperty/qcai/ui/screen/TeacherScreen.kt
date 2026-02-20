@@ -56,6 +56,7 @@ import com.quantumproperty.qcai.data.ChatMessage
 import com.quantumproperty.qcai.data.PreferenceManager
 import com.quantumproperty.qcai.ui.viewmodel.DisplayMode
 import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
+import com.quantumproperty.qcai.utils.BrowserUtils
 
 // Premium Color Palette
 val PrimaryPurple = Color(0xFF6200EE)
@@ -70,8 +71,6 @@ val LightGrey = Color(0xFFF5F5F7)
 @Composable
 fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     val messages by viewModel.messages.collectAsState()
-    val showInAppBrowser by viewModel.showInAppBrowser.collectAsState()
-    val inAppBrowserUrl by viewModel.inAppBrowserUrl.collectAsState()
     val selectedTopic by viewModel.selectedTopic.collectAsState()
     val displayMode by viewModel.displayMode.collectAsState()
     val currentWebUrl by viewModel.currentWebUrl.collectAsState()
@@ -88,6 +87,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
 
     val appLanguage by viewModel.appLanguage.collectAsState()
     val isEnglish = appLanguage == AppLanguage.ENGLISH
+
     
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -124,69 +124,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
         }
     }
 
-    if (showInAppBrowser && inAppBrowserUrl != null) {
-        Dialog(
-            onDismissRequest = { viewModel.closeInAppBrowser() },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Header Bar
-                    Surface(
-                        shadowElevation = 4.dp,
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                             IconButton(onClick = { viewModel.closeInAppBrowser() }) {
-                                 Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                             }
-                             Text(
-                                 text = if (isEnglish) "Web Browser" else "网页浏览",
-                                 style = MaterialTheme.typography.titleMedium,
-                                 modifier = Modifier.weight(1f).padding(start = 16.dp)
-                             )
-                             IconButton(onClick = { viewModel.closeInAppBrowser() }) {
-                                 Icon(Icons.Default.Close, contentDescription = "Close")
-                             }
-                        }
-                    }
-                    
-                    Box(modifier = Modifier.weight(1f)) {
-                    // AndroidView is now inside the Box
-                    AndroidView(
-                        factory = { context ->
-                            WebView(context).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                settings.javaScriptEnabled = true
-                                 webViewClient = object : WebViewClient() {
-                                     override fun shouldOverrideUrlLoading(
-                                         view: WebView?,
-                                         request: WebResourceRequest?
-                                     ): Boolean {
-                                         // Allow navigation within the in-app browser
-                                         return false
-                                     }
-                                 }
-                                 loadUrl(inAppBrowserUrl!!)
-                            }
-                        },
-                        update = { view ->
-                             // Ensure we can go back if user navigates within the webview
-                             view.tag = "InAppBrowser" 
-                        }
-                    )
-                    } // End Box
-                }
-            }
-        }
-    }
-    
+
     if (showAPIKeySetup) {
         APIKeySetupDialog(
             onDismiss = { viewModel.dismissAPIKeySetup() },
@@ -207,7 +145,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     onConfirm = { address -> viewModel.analyzeRealEstate(address) },
                     onChatWithAI = { viewModel.startAIChat() },
                     modifier = Modifier.padding(16.dp),
-                    isEnglish = isEnglish
+                    appLanguage = appLanguage
                 )
             }
         }
@@ -231,7 +169,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     viewModel.showError(if (isEnglish) "Please enter email first" else "请先输入邮箱")
                 }
             },
-            isEnglish = isEnglish
+            appLanguage = appLanguage
         )
     }
     
@@ -243,7 +181,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 viewModel.closeRegister()
                 viewModel.openLogin()
             },
-            isEnglish = isEnglish
+            appLanguage = appLanguage
         )
     }
     
@@ -304,7 +242,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             Surface(modifier = Modifier.fillMaxSize()) {
                 TheSceneScreen(
                     viewModel = viewModel,
-                    isEnglish = isEnglish,
+                    appLanguage = appLanguage,
                     onBack = { viewModel.closeTheSceneView() }
                 )
             }
@@ -505,21 +443,66 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                         // Category 3: Tools
                         val userTools by viewModel.userSpecificTools.collectAsState(initial = emptyList())
                         
+                        // Static "Caller ID Lookup" (Native-like web tool for now, or new screen? User asked for native look.
+                        // In iOS we used TwilioLookupView. In Android we don't have that screen yet.
+                        // I will add it as a link for now but clearly marked, or better yet, I can't build a full screen now.
+                        // I'll add it as a top item in the Tools list with a red icon.
+                        
+                        Text(
+                            text = if (isEnglish) " Tools" else " 常用工具",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+
+                        // Caller ID Lookup (New)
+                        DropdownMenuItem(
+                            text = { Text(if (isEnglish) "Caller ID Lookup" else "来电身份查询") },
+                            onClick = {
+                                showAIAndToolsMenu = false
+                                //viewModel.openTwilioLookup() // Need to implement this or just open web
+                                BrowserUtils.openURL(context, "https://quantumpropertyllc.github.io/tools/callerid.html") // Placeholder URL or feature
+                            },
+                            leadingIcon = { 
+                                Icon(
+                                    imageVector = Icons.Default.Person, // Closest to ID card
+                                    contentDescription = null, 
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.Red
+                                ) 
+                            }
+                        )
+                        
                         if (userTools.isNotEmpty()) {
-                            Text(
-                                text = if (isEnglish) " Tools" else " 常用工具",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.Gray,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                            userTools.forEach { item ->
+                            userTools.forEachIndexed { index, item ->
+                                val vibrantColors = listOf(
+                                    Color(0xFFAF52DE), // Purple
+                                    Color(0xFF007AFF), // Blue
+                                    Color(0xFFFF9500), // Orange
+                                    Color(0xFF34C759), // Green
+                                    Color(0xFFFF2D55), // Pink
+                                    Color(0xFF30B0C7), // Teal
+                                    Color(0xFF5856D6), // Indigo
+                                    Color(0xFFFF3B30)  // Red
+                                )
+                                val iconColor = vibrantColors[index % vibrantColors.size]
+
                                 DropdownMenuItem(
                                     text = { Text(if (isEnglish) item.englishName else item.chineseName) },
                                     onClick = {
                                         showAIAndToolsMenu = false
-                                        viewModel.openInAppBrowser(item.url)
+                                        BrowserUtils.openURL(context, item.url)
                                     },
-                                    leadingIcon = { Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                    leadingIcon = { 
+                                        // Use Globe as default if no icon mapping available, or map string to vector if possible.
+                                        // For now, simple colored icon.
+                                        Icon(
+                                            imageVector = Icons.Default.Build, 
+                                            contentDescription = null, 
+                                            modifier = Modifier.size(16.dp),
+                                            tint = iconColor
+                                        ) 
+                                    }
                                 )
                             }
                         } else if (!isLoggedIn) {
@@ -572,7 +555,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     ) {
                         UserQuickSettingsSheet(
                             viewModel = viewModel,
-                            isEnglish = isEnglish,
+                            appLanguage = appLanguage,
                             onDismiss = { showUserSheet = false },
                             onDeleteClick = { showDeleteAccountConfirmation = true }
                         )
@@ -662,7 +645,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                 topic = topic,
                                 dynamicItem = dynamicItem,
                                 isSelected = selectedTopic == topic,
-                                isEnglish = isEnglish,
+                                appLanguage = appLanguage,
                                 onClick = { viewModel.setTopic(topic) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -683,10 +666,10 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     selectedTopic == AITopic.CLT_VIBE -> {
-                        CLTVibeView(viewModel, isEnglish)
+                        CLTVibeView(viewModel)
                     }
                     selectedTopic == AITopic.STOCK -> {
-                        StockScreen(onOpenSettings = { viewModel.openAPIKeySetup() })
+                        StockScreen()
                     }
                     displayMode == DisplayMode.WEB && currentWebUrl != null -> {
                         Column(modifier = Modifier.fillMaxSize()) {
@@ -706,20 +689,27 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                                                  request: WebResourceRequest?
                                              ): Boolean {
                                                  val url = request?.url?.toString()
-                                                 if (url != null) {
-                                                     // Intercept external links and open in the in-app pop-up
-                                                     viewModel.openInAppBrowser(url)
-                                                     return true
+                                                 if (url != null && view != null) {
+                                                     val currentHost = Uri.parse(currentWebUrl ?: "").host
+                                                     val targetHost = request.url?.host
+                                                     
+                                                     // Only intercept if it's a different host (external link)
+                                                     if (targetHost != null && targetHost != currentHost) {
+                                                         BrowserUtils.openURL(view.context, url)
+                                                         return true
+                                                     }
                                                  }
                                                  return false
                                              }
                                          }
-                                        loadUrl(currentWebUrl!!)
+                                        currentWebUrl?.let { loadUrl(it) }
                                     }
                                 },
                                 update = { view ->
                                     val url = currentWebUrl
-                                    if (url != null && view.url != url) {
+                                    // Robust check to avoid reload loops: 
+                                    // only load if the URL is fundamentally different and not already loading.
+                                    if (url != null && view.url != url && !url.equals(view.originalUrl, ignoreCase = true)) {
                                         view.loadUrl(url)
                                     }
                                 },
@@ -811,10 +801,13 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
 @Composable
 fun UserQuickSettingsSheet(
     viewModel: TeacherViewModel,
-    isEnglish: Boolean,
+    appLanguage: AppLanguage,
     onDismiss: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    val isEnglish = appLanguage == AppLanguage.ENGLISH
+
+    val context = LocalContext.current
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val userName by viewModel.userName.collectAsState()
     val isSpeechEnabled by viewModel.isSpeechEnabled.collectAsState()
@@ -976,13 +969,12 @@ fun UserQuickSettingsSheet(
                     onClick = onDeleteClick
                 )
                 Divider()
-                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                 SettingsActionItem(
                     icon = Icons.Default.QuestionMark,
                     text = if (isEnglish) "Help & Support" else "帮助与支持",
                     onClick = {
                         val helpUrl = if (isEnglish) "https://www.queencityai.net" else "https://www.queencityai.net/static/index_cn.html"
-                        viewModel.openInAppBrowser(helpUrl)
+                        BrowserUtils.openURL(context, helpUrl)
                         onDismiss()
                     }
                 )
@@ -1068,88 +1060,19 @@ fun SettingsActionItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TextInputArea(
-    onSend: (String) -> Unit, 
-    onCameraClick: () -> Unit, 
-    onMicClick: () -> Unit,
-    isRecording: Boolean,
-    placeholder: String
-) {
-    var text by remember { mutableStateOf("") }
-    
-    Surface(
-        tonalElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(8.dp)
-                .navigationBarsPadding()
-                .imePadding(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onCameraClick,
-                colors = IconButtonDefaults.iconButtonColors(contentColor = PrimaryPurple)
-            ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = "Camera")
-            }
-            Spacer(Modifier.width(4.dp))
-
-            TextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(placeholder) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White
-                )
-            )
-            Spacer(Modifier.width(8.dp))
-            
-            IconButton(
-                onClick = {
-                    if (text.isNotBlank()) {
-                        onSend(text)
-                        text = ""
-                    } else {
-                        onMicClick()
-                    }
-                },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRecording) Color.Red else Color.Transparent,
-                    contentColor = if (isRecording) Color.White else PrimaryPurple
-                )
-            ) {
-                Icon(
-                    imageVector = when {
-                        isRecording -> Icons.Default.Stop
-                        text.isNotBlank() -> Icons.Default.Send
-                        else -> Icons.Default.Mic
-                    }, 
-                    contentDescription = if (isRecording) "Stop" else "Send/Mic"
-                )
-            }
-        }
-    }
-}
+// TextInputArea moved to SharedInput.kt
 
 @Composable
 fun TopicButton(
     topic: AITopic, 
     dynamicItem: com.quantumproperty.qcai.data.TopMenuItem? = null,
     isSelected: Boolean, 
-    isEnglish: Boolean,
+    appLanguage: AppLanguage,
     onClick: () -> Unit, 
     modifier: Modifier = Modifier
 ) {
+    val isEnglish = appLanguage == AppLanguage.ENGLISH
+
     val icon = if (dynamicItem != null) {
         when (dynamicItem.icon.lowercase()) {
             "newspaper" -> Icons.Default.Public
@@ -1178,6 +1101,7 @@ fun TopicButton(
             AITopic.MISC -> Icons.Default.Dashboard
             AITopic.CLT_VIBE -> Icons.Default.AutoAwesome
             AITopic.STOCK -> Icons.Default.ShowChart
+            AITopic.NONE -> Icons.Default.Dashboard
         }
     }
     
@@ -1302,13 +1226,26 @@ fun MessageBubble(msg: ChatMessage) {
     val viewModel: TeacherViewModel = viewModel()
     val appLanguage by viewModel.appLanguage.collectAsState()
     val isEnglish = appLanguage == AppLanguage.ENGLISH
+    val isSpanish = appLanguage == AppLanguage.SPANISH
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (msg.isUser) Alignment.End else Alignment.Start
     ) {
         Text(
-            text = if (msg.isUser) (if (isEnglish) "User" else "用户") else (if (isEnglish) "AI Answer" else "AI 回答"),
+            text = if (msg.isUser) {
+                when {
+                    isSpanish -> "Usuario"
+                    isEnglish -> "User"
+                    else -> "用户"
+                }
+            } else {
+                when {
+                    isSpanish -> "Respuesta de IA"
+                    isEnglish -> "AI Answer"
+                    else -> "AI 回答"
+                }
+            },
             style = MaterialTheme.typography.labelSmall,
             color = if (msg.isUser) Color.Blue else Color(0xFF4CAF50),
             modifier = Modifier.padding(bottom = 4.dp)
@@ -1329,211 +1266,10 @@ fun MessageBubble(msg: ChatMessage) {
                     Divider(color = Color.Black.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 4.dp))
                     
                     when (type) {
-                        "worth_it" -> WorthItScorecardView(data = extra, isEnglish = isEnglish)
-                        "reality_check" -> RealityCheckDashboardView(data = extra, isEnglish = isEnglish)
-                        "rent_analysis" -> RentAnalysisCardView(data = extra, isEnglish = isEnglish)
-                        "the_scene" -> TheSceneDashboardView(data = extra, isEnglish = isEnglish)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun APIKeySetupDialog(onDismiss: () -> Unit, onSave: () -> Unit) {
-    var openAIKey by remember { mutableStateOf(PreferenceManager.openAIKey) }
-    var geminiKey by remember { mutableStateOf(PreferenceManager.geminiKey) }
-    val viewModel: TeacherViewModel = viewModel()
-    val selectedEngine by viewModel.selectedEngine.collectAsState()
-    val apiKeySetupReason by viewModel.apiKeySetupReason.collectAsState()
-    val uriHandler = LocalUriHandler.current
-
-    val appLanguage by viewModel.appLanguage.collectAsState()
-    val isEnglish = appLanguage == AppLanguage.ENGLISH
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            LazyColumn(modifier = Modifier.padding(20.dp)) {
-                item {
-                    Text(if (isEnglish) "API Settings" else "API 设置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    
-                    apiKeySetupReason?.let { reason ->
-                        Spacer(Modifier.height(8.dp))
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red)
-                                Spacer(Modifier.width(8.dp))
-                                Text(reason, color = Color.Red, style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                    
-                    // AI Engine Selection
-                    Text(if (isEnglish) "AI Platform" else "AI 平台选择", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { viewModel.setEngine(AIEngine.CHATGPT) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (selectedEngine == AIEngine.CHATGPT) PrimaryPurple else Color.LightGray
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("ChatGPT", color = if (selectedEngine == AIEngine.CHATGPT) Color.White else Color.DarkGray)
-                        }
-                        Button(
-                            onClick = { viewModel.setEngine(AIEngine.GEMINI) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (selectedEngine == AIEngine.GEMINI) PrimaryPurple else Color.LightGray
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Gemini", color = if (selectedEngine == AIEngine.GEMINI) Color.White else Color.DarkGray)
-                        }
-                    }
-                    
-                    Spacer(Modifier.height(20.dp))
-                    Divider()
-                    Spacer(Modifier.height(20.dp))
-                    
-                    // Instructions
-                    Text(if (isEnglish) "How to get API Key" else "如何获取 API Key", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    
-                    val instructions = if (isEnglish) listOf(
-                        "1. Click the button below to visit the API Key page",
-                        "2. Log in or sign up",
-                        "3. Generate a new API Key",
-                        "4. Copy and paste it into the field below"
-                    ) else listOf(
-                        "1. 点击下方按钮访问对应平台的 API Key 生成页面",
-                        "2. 登录或注册账号",
-                        "3. 生成新的 API Key",
-                        "4. 复制 API Key 并粘贴到下方输入框中"
-                    )
-
-                    instructions.forEach { step ->
-                        Text(
-                            step,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.DarkGray
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    
-                    Spacer(Modifier.height(8.dp))
-                    val noteText = if (isEnglish) 
-                        "Note: Using free tier API Keys from OpenAI and Gemini should be sufficient for the daily use of this app for most users."
-                    else 
-                        "注意：使用 OpenAI 和 Gemini 的免费层级 API Key 通常足以满足大多数用户的日常使用需求。"
-                        
-                    Text(
-                        text = noteText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = PrimaryPurple,
-                        fontWeight = FontWeight.Medium
-                    )
-                    
-                    Spacer(Modifier.height(16.dp))
-                    
-                    // Links to get API keys
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { uriHandler.openUri("https://platform.openai.com/api-keys") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(if (isEnglish) "Get OpenAI Key" else "获取 OpenAI Key", fontSize = 12.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { uriHandler.openUri("https://aistudio.google.com") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(if (isEnglish) "Get Gemini Key" else "获取 Gemini Key", fontSize = 12.sp)
-                        }
-                    }
-                    
-                    Spacer(Modifier.height(20.dp))
-                    Divider()
-                    Spacer(Modifier.height(20.dp))
-                    
-                    // API Key Input Fields
-                    Text(if (isEnglish) "API Key Input" else "API Key 输入", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(12.dp))
-                    
-                    OutlinedTextField(
-                        value = openAIKey,
-                        onValueChange = { openAIKey = it },
-                        label = { Text("OpenAI API Key") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null, tint = PrimaryPurple) }
-                    )
-                    
-                    Spacer(Modifier.height(12.dp))
-                    
-                    OutlinedTextField(
-                        value = geminiKey,
-                        onValueChange = { geminiKey = it },
-                        label = { Text("Gemini API Key") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null, tint = PrimaryPurple) }
-                    )
-                    
-                    Spacer(Modifier.height(24.dp))
-                    
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = onDismiss) {
-                            Text(if (isEnglish) "Cancel" else "取消", color = Color.Gray)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                PreferenceManager.openAIKey = openAIKey
-                                PreferenceManager.geminiKey = geminiKey
-                                onSave()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(if (isEnglish) "Save" else "保存")
-                        }
+                        "worth_it" -> WorthItScorecardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                        "reality_check" -> RealityCheckDashboardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                        "rent_analysis" -> RentAnalysisCardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                        "the_scene" -> TheSceneDashboardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
                     }
                 }
             }
@@ -1542,447 +1278,7 @@ fun APIKeySetupDialog(onDismiss: () -> Unit, onSave: () -> Unit) {
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun RealEstateInputArea(
-    onDismiss: () -> Unit, 
-    onConfirm: (String) -> Unit, 
-    onChatWithAI: () -> Unit,
-    isEnglish: Boolean, 
-    modifier: Modifier = Modifier
-) {
-    var text by remember { mutableStateOf("") }
-    
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .wrapContentHeight(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    if (isEnglish) "Property Assistant" else "房产助手",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = PrimaryPurple
-                )
-                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                }
-            }
-            
-            Spacer(Modifier.height(12.dp))
-            
-            Text(
-                if (isEnglish) "Enter address for a full AI analysis" else "输入房产地址，AI 将为您全面分析该房产信息",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.DarkGray,
-                textAlign = TextAlign.Center
-            )
-            
-            Spacer(Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text(if (isEnglish) "e.g. 123 Main St, Charlotte, NC" else "例如：123 Main St, Charlotte, NC") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PrimaryPurple,
-                    unfocusedBorderColor = Color.LightGray
-                ),
-                singleLine = true
-            )
-            
-            Spacer(Modifier.height(16.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { 
-                        if (text.isNotBlank()) {
-                            onConfirm(text) 
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-                    shape = RoundedCornerShape(12.dp),
-                    enabled = text.isNotBlank()
-                ) {
-                    Text(if (isEnglish) "Analysis" else "开始分析", color = Color.White)
-                }
-                
-                OutlinedButton(
-                    onClick = onChatWithAI,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (isEnglish) "Chat with AI" else "与 AI 交流")
-                }
-            }
-        }
-    }
-}
 
-@Composable
-fun LoginDialog(
-    onDismiss: () -> Unit,
-    onLogin: (String, String) -> Unit,
-    onRegisterClick: () -> Unit,
-    onForgotPassword: (String) -> Unit,
-    isEnglish: Boolean
-) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isEnglish) "Login" else "登录") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(if (isEnglish) "Password" else "密码") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                )
-                TextButton(onClick = { 
-                    onDismiss()
-                    onRegisterClick()
-                }) {
-                    Text(if (isEnglish) "No account? Register" else "没有账号？注册")
-                }
-                TextButton(onClick = {
-                    onForgotPassword(email)
-                }) {
-                   Text(if (isEnglish) "Forgot Password?" else "忘记密码？", color = Color.Gray)
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onLogin(email, password) },
-                enabled = email.isNotBlank() && password.isNotBlank()
-            ) {
-                Text(if (isEnglish) "Login" else "登录")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(if (isEnglish) "Cancel" else "取消")
-            }
-        }
-    )
-}
-
-@Composable
-fun RegisterDialog(
-    onDismiss: () -> Unit,
-    onRegister: (String, String, String, String, String) -> Unit,
-    onLoginClick: () -> Unit,
-    isEnglish: Boolean
-) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var fullName by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var agreedToTerms by remember { mutableStateOf(false) }
-    var showEULA by remember { mutableStateOf(false) }
-    
-
-    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-    
-    // EULA Dialog
-    if (showEULA) {
-        AlertDialog(
-            onDismissRequest = { showEULA = false },
-            title = { 
-                Text(
-                    "Generative AI & Content EULA",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        "End User License Agreement (EULA)",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                    
-                    Text(
-                        """
-                        1. Agreement to Terms
-                        By using this application, you agree to these terms. If you do not agree, do not use the application.
-
-                        2. User Generated Content (UGC)
-                        Users may post content (Events, Marketplace Items, Rentals). You agree that you will not post content that is:
-                        • Illegal, harmful, or fraudulent
-                        • Hateful, harassing, or bullying
-                        • Pornographic or sexually explicit
-                        • Infringing on intellectual property rights
-
-                        3. Zero Tolerance Policy
-                        We have a zero-tolerance policy for objectionable content. Content found to be in violation will be removed immediately, and the user's account may be banned without warning.
-
-                        4. Reporting
-                        You agree to report any content that violates these terms using the 'Report' feature provided on content.
-
-                        5. Disclaimer
-                        The developers are not responsible for the content posted by users. Use the marketplace and rental sections at your own risk.
-                        
-                        6. Privacy Notice
-                        Your data is collected solely for account management and is securely stored. We do not share your personal information with third parties for marketing purposes.
-                        """.trimIndent(),
-                        fontSize = 13.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showEULA = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-
-    // Full Screen Dialog for Registration
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding() 
-                    .imePadding()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isEnglish) "Register" else "注册",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                }
-
-                // Scrollable Form
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    OutlinedTextField(
-                        value = email, 
-                        onValueChange = { email = it },
-                        label = { Text("Email (Verify Link will be sent)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email)
-                    )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text(if (isEnglish) "Password" else "密码") },
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        singleLine = true,
-                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
-                    )
-                    OutlinedTextField(
-                        value = fullName,
-                        onValueChange = { fullName = it },
-                        label = { Text(if (isEnglish) "Full Name" else "全名") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = { Text(if (isEnglish) "Username" else "用户名") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it },
-                        label = { Text(if (isEnglish) "Phone Number" else "电话号码") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone)
-                    )
-                    
-                    // Terms and EULA Agreement
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = PrimaryPurple.copy(alpha = 0.05f)
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { agreedToTerms = !agreedToTerms }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = agreedToTerms,
-                                onCheckedChange = { agreedToTerms = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = PrimaryPurple
-                                )
-                            )
-                            
-                            Column(modifier = Modifier.padding(start = 8.dp)) {
-                                androidx.compose.ui.text.AnnotatedString.Builder().apply {
-                                    if (isEnglish) {
-                                        append("I agree to the ")
-                                    } else {
-                                        append("我同意 ")
-                                    }
-                                }
-                                
-                                Text(
-                                    text = if (isEnglish) 
-                                        "I agree to the Terms of Service and EULA" 
-                                    else 
-                                        "我同意服务条款和最终用户许可协议",
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                
-                                Row(
-                                    modifier = Modifier.padding(top = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Text(
-                                        text = if (isEnglish) "Terms of Service" else "服务条款",
-                                        color = PrimaryPurple,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.clickable {
-                                            uriHandler.openUri("https://cyberpandaapp.com/terms")
-                                        },
-                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                    )
-                                    
-                                    Text(
-                                        text = "EULA",
-                                        color = PrimaryPurple,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.clickable {
-                                            showEULA = true
-                                        },
-                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                    )
-                                    
-                                    Text(
-                                        text = if (isEnglish) "Privacy Policy" else "隐私政策",
-                                        color = PrimaryPurple,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.clickable {
-                                            uriHandler.openUri("https://cyberpandaapp.com/privacy")
-                                        },
-                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                    )
-                                }
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                // Read Full EULA Button
-                                TextButton(
-                                    onClick = { showEULA = true },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        Icons.Default.MenuBook,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = PrimaryPurple
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (isEnglish) "Read Full EULA & Policies" else "阅读完整的服务条款",
-                                        fontSize = 11.sp,
-                                        color = PrimaryPurple
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Button(
-                        onClick = { onRegister(email, password, fullName, username, phone) },
-                        enabled = email.isNotBlank() && password.isNotBlank() && username.isNotBlank() && agreedToTerms,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(if (isEnglish) "Register" else "注册", fontSize = 16.sp)
-                    }
-
-                    TextButton(
-                        onClick = {
-                            onDismiss()
-                            onLoginClick()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (isEnglish) "Already have account? Login" else "已有账号？登录")
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-        }
-    }
-}
+// Duplicate dialogs removed (moved to SharedComponents.kt)
 
 

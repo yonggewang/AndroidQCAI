@@ -73,6 +73,7 @@ class TopMenuManager {
                     val nameCn = components[2].trim()
                     val urlCn = components[3].trim()
                     val urlEn = components[4].trim()
+                    val urlEs = if (components.size > 5) components[5].trim() else ""
 
                     items.add(TopMenuItem(
                         icon = icon,
@@ -80,6 +81,7 @@ class TopMenuManager {
                         chineseName = nameCn,
                         chineseUrl = urlCn,
                         englishUrl = urlEn,
+                        spanishUrl = urlEs,
                         topic = topics[topicIndex]
                     ))
                     topicIndex++

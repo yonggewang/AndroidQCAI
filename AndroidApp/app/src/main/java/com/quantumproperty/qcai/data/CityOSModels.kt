@@ -12,6 +12,25 @@ data class DailyBriefResponse(
     @SerializedName("extra_data") val extraData: Map<String, Any>? = null
 )
 
+data class AINewsBrief(
+    val headline: String,
+    val summary: String,
+    @SerializedName("full_url") val fullUrl: String
+)
+
+data class AINewsResponse(
+    val timestamp: String,
+    val articles: List<AINewsArticle>
+)
+
+data class AINewsArticle(
+    val title: String,
+    val industry: String,
+    val summary: String,
+    @SerializedName("charlotte_impact") val charlotteImpact: String,
+    @SerializedName("impact_score") val impactScore: Int
+)
+
 data class ChatResponse(
     val answer: String,
     @SerializedName("extra_data") val extraData: Map<String, Any>? = null

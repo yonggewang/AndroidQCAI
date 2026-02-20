@@ -42,26 +42,30 @@ class TTSManager(
                         Log.d(TAG, "TTS initialized successfully")
                         // Default to US English instead of Chinese to avoid failure on standard emulators/phones
                         // The ViewModel will override this with the correct user preference immediately after.
+                        // Try to set a default language, but don't fail initialization if it's missing data.
+                        // The app will set the specific required language (e.g. Chinese) later.
                         val result = tts?.setLanguage(Locale.US)
+                        
+                        // We mark initialized as TRUE even if data is missing, because the user might
+                        // install it later or switch to a working language.
+                        isInitialized = true
                         
                         when (result) {
                             TextToSpeech.LANG_MISSING_DATA -> {
-                                val errorMsg = "Chinese language data is missing. TTS may not work properly."
-                                Log.e(TAG, errorMsg)
-                                onInitFailure?.invoke(errorMsg)
-                                isInitialized = false
+                                Log.w(TAG, "US English language data is missing. TTS will try to use other languages later.")
                             }
                             TextToSpeech.LANG_NOT_SUPPORTED -> {
-                                val errorMsg = "Chinese language is not supported by TTS engine."
-                                Log.e(TAG, errorMsg)
-                                onInitFailure?.invoke(errorMsg)
-                                isInitialized = false
+                                Log.w(TAG, "US English language is not supported by TTS engine. TTS will try to use other languages later.")
                             }
                             else -> {
-                                isInitialized = true
-                                setupUtteranceListener()
-                                
-                                // Set audio attributes for TTS playback
+                                Log.d(TAG, "Default language (US) available.")
+                            }
+                        }
+
+                        // Always proceed to success callback so the app can try setting the actual desired language
+                        setupUtteranceListener()
+                        
+                        // Set audio attributes for TTS playback
                                 tts?.let { engine ->
                                     try {
                                         // Request audio focus
@@ -79,10 +83,8 @@ class TTSManager(
                                     }
                                 }
                                 
-                                Log.d(TAG, "✅ TTS ready! Language: Chinese")
+                                Log.d(TAG, "✅ TTS initialized!")
                                 onInitSuccess?.invoke()
-                            }
-                        }
                     }
                     TextToSpeech.ERROR -> {
                         val errorMsg = "TTS initialization failed. Audio playback unavailable."

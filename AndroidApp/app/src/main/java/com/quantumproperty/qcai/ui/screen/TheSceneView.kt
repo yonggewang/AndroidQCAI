@@ -24,24 +24,62 @@ import com.quantumproperty.qcai.data.SceneEvent
 import com.quantumproperty.qcai.data.SceneVenue
 import com.quantumproperty.qcai.data.SceneResponse
 
+import com.quantumproperty.qcai.data.AppLanguage
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TheSceneScreen(
     viewModel: TeacherViewModel,
-    isEnglish: Boolean,
+    appLanguage: AppLanguage,
     onBack: () -> Unit
 ) {
     val sceneData by viewModel.sceneData.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    
+    val isEnglish = appLanguage == AppLanguage.ENGLISH
+    val isSpanish = appLanguage == AppLanguage.SPANISH
+    
     var selectedCategory by remember { mutableStateOf("Tech") }
-    val categories = listOf("Tech", "Music", "Art", "Social", "Family")
+    val categories = remember(appLanguage) {
+        listOf(
+            when {
+                isSpanish -> "Tecnología"
+                isEnglish -> "Tech"
+                else -> "科技"
+            },
+            when {
+                isSpanish -> "Música"
+                isEnglish -> "Music"
+                else -> "音乐"
+            },
+            when {
+                isSpanish -> "Arte"
+                isEnglish -> "Art"
+                else -> "艺术"
+            },
+            when {
+                isSpanish -> "Social"
+                isEnglish -> "Social"
+                else -> "社交"
+            },
+            when {
+                isSpanish -> "Familia"
+                isEnglish -> "Family"
+                else -> "家庭"
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { 
                     Text(
-                        if (isEnglish) "The Scene" else "社群氛围",
+                        when {
+                            isSpanish -> "El Escenario"
+                            isEnglish -> "The Scene"
+                            else -> "社群氛围"
+                        },
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     ) 
@@ -118,14 +156,18 @@ fun TheSceneScreen(
                         if (data.events.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = if (isEnglish) "Upcoming Events" else "近期活动",
+                                    text = when {
+                                        isSpanish -> "Próximos Eventos"
+                                        isEnglish -> "Upcoming Events"
+                                        else -> "近期活动"
+                                    },
                                     color = Color.White,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             items(data.events) { event ->
-                                AndroidEventRow(event, isEnglish)
+                                AndroidEventRow(event, isSpanish, isEnglish)
                             }
                         }
 
@@ -133,14 +175,18 @@ fun TheSceneScreen(
                         if (data.venues.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = if (isEnglish) "Hot Venues" else "热门地点",
+                                    text = when {
+                                        isSpanish -> "Lugares Populares"
+                                        isEnglish -> "Hot Venues"
+                                        else -> "热门地点"
+                                    },
                                     color = Color.White,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             items(data.venues) { venue ->
-                                AndroidVenueRow(venue, isEnglish)
+                                AndroidVenueRow(venue, isSpanish, isEnglish)
                             }
                         }
                         
@@ -148,7 +194,11 @@ fun TheSceneScreen(
                     }
                 } else {
                     Text(
-                        text = if (isEnglish) "Scan the scene to start." else "扫描氛围以开始。",
+                        text = when {
+                            isSpanish -> "Escanea la escena para comenzar."
+                            isEnglish -> "Scan the scene to start."
+                            else -> "扫描氛围以开始。"
+                        },
                         modifier = Modifier.align(Alignment.Center),
                         color = Color.Gray
                     )
@@ -177,7 +227,7 @@ fun CategoryChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun AndroidEventRow(event: SceneEvent, isEnglish: Boolean) {
+fun AndroidEventRow(event: SceneEvent, isSpanish: Boolean, isEnglish: Boolean) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.White.copy(alpha = 0.03f),
@@ -222,7 +272,7 @@ fun AndroidEventRow(event: SceneEvent, isEnglish: Boolean) {
 }
 
 @Composable
-fun AndroidVenueRow(venue: SceneVenue, isEnglish: Boolean) {
+fun AndroidVenueRow(venue: SceneVenue, isSpanish: Boolean, isEnglish: Boolean) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.White.copy(alpha = 0.03f),

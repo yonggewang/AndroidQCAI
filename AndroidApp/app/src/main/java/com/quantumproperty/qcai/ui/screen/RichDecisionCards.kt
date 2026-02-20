@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 // MARK: - Rich Visual Cards
 
 @Composable
-fun WorthItScorecardView(data: Map<String, Any>, isEnglish: Boolean) {
+fun WorthItScorecardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: Boolean) {
     val score = (data["score"] as? Double)?.toInt() ?: (data["score"] as? Int) ?: 70
     val verdict = data["verdict"] as? String ?: "Worth it"
     val pros = data["pros"] as? List<String> ?: emptyList()
@@ -58,7 +58,11 @@ fun WorthItScorecardView(data: Map<String, Any>, isEnglish: Boolean) {
 
             Column {
                 Text(
-                    text = if (isEnglish) "VERDICT" else "评语",
+                    text = when {
+                        isSpanish -> "VEREDICTO"
+                        isEnglish -> "VERDICT"
+                        else -> "评语"
+                    },
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.4f)
@@ -78,7 +82,11 @@ fun WorthItScorecardView(data: Map<String, Any>, isEnglish: Boolean) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.ThumbUp, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = if (isEnglish) "PROS" else "优点", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                    Text(text = when {
+                        isSpanish -> "PROS"
+                        isEnglish -> "PROS"
+                        else -> "优点"
+                    }, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
                 }
                 pros.forEach { pro ->
                     Text(text = "• $pro", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
@@ -89,7 +97,11 @@ fun WorthItScorecardView(data: Map<String, Any>, isEnglish: Boolean) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.ThumbDown, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(text = if (isEnglish) "CONS" else "缺点", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF44336))
+                    Text(text = when {
+                        isSpanish -> "CONTRAS"
+                        isEnglish -> "CONS"
+                        else -> "缺点"
+                    }, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF44336))
                 }
                 cons.forEach { con ->
                     Text(text = "• $con", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
@@ -111,7 +123,11 @@ fun WorthItScorecardView(data: Map<String, Any>, isEnglish: Boolean) {
                 Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Color(0xFFFFD600))
                 Column {
                     Text(
-                        text = if (isEnglish) "LOCAL HACK" else "本地秘籍",
+                        text = when {
+                            isSpanish -> "TRUCO LOCAL"
+                            isEnglish -> "LOCAL HACK"
+                            else -> "本地秘籍"
+                        },
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFFFFD600).copy(alpha = 0.8f)
@@ -124,7 +140,7 @@ fun WorthItScorecardView(data: Map<String, Any>, isEnglish: Boolean) {
 }
 
 @Composable
-fun RealityCheckDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
+fun RealityCheckDashboardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: Boolean) {
     val neighborhood = data["neighborhood"] as? String ?: "Charlotte"
     val growth = data["growth"] as? String ?: "+0.0%"
     val outlook = data["outlook"] as? String ?: "Stable"
@@ -142,7 +158,11 @@ fun RealityCheckDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
             Column {
                 Text(text = neighborhood, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                 Text(
-                    text = if (isEnglish) "2026 Market Outlook" else "2026 市场展望",
+                    text = when {
+                        isSpanish -> "Perspectiva del Mercado 2026"
+                        isEnglish -> "2026 Market Outlook"
+                        else -> "2026 市场展望"
+                    },
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.5f)
                 )
@@ -163,14 +183,26 @@ fun RealityCheckDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DashboardMetric(
-                label = if (isEnglish) "OUTLOOK" else "展望",
+                label = when {
+                    isSpanish -> "PERSPECTIVA"
+                    isEnglish -> "OUTLOOK"
+                    else -> "展望"
+                },
                 value = outlook,
                 color = Color(0xFF007AFF),
                 modifier = Modifier.weight(1f)
             )
             DashboardMetric(
-                label = if (isEnglish) "STRATEGY" else "策略",
-                value = if (isEnglish) "Buy & Hold" else "长期持有",
+                label = when {
+                    isSpanish -> "ESTRATEGIA"
+                    isEnglish -> "STRATEGY"
+                    else -> "策略"
+                },
+                value = when {
+                    isSpanish -> "Comprar y Mantener"
+                    isEnglish -> "Buy & Hold"
+                    else -> "长期持有"
+                },
                 color = Color(0xFFF57C00),
                 modifier = Modifier.weight(1f)
             )
@@ -178,7 +210,11 @@ fun RealityCheckDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = if (isEnglish) "PRIMARY GROWTH DRIVER" else "核心增长动力",
+                text = when {
+                    isSpanish -> "MOTOR DE CRECIMIENTO PRIMARIO"
+                    isEnglish -> "PRIMARY GROWTH DRIVER"
+                    else -> "核心增长动力"
+                },
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White.copy(alpha = 0.4f)
@@ -194,7 +230,7 @@ fun RealityCheckDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
 }
 
 @Composable
-fun RentAnalysisCardView(data: Map<String, Any>, isEnglish: Boolean) {
+fun RentAnalysisCardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: Boolean) {
     val price = (data["price"] as? Double)?.toInt() ?: (data["price"] as? Int) ?: 0
     val avg = (data["avg"] as? Double)?.toInt() ?: (data["avg"] as? Int) ?: 0
     val verdict = data["verdict"] as? String ?: "fair"
@@ -217,7 +253,11 @@ fun RentAnalysisCardView(data: Map<String, Any>, isEnglish: Boolean) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = if (isEnglish) "Rent Fair-Check" else "租金公平性检测", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(text = when {
+                isSpanish -> "Chequeo de Alquiler Justo"
+                isEnglish -> "Rent Fair-Check"
+                else -> "租金公平性检测"
+            }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Surface(color = verdictColor, shape = RoundedCornerShape(4.dp)) {
                 Text(
                     text = verdict.uppercase(),
@@ -231,12 +271,20 @@ fun RentAnalysisCardView(data: Map<String, Any>, isEnglish: Boolean) {
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Column {
-                Text(text = if (isEnglish) "YOUR PRICE" else "你的价格", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.5f))
+                Text(text = when {
+                    isSpanish -> "TU PRECIO"
+                    isEnglish -> "YOUR PRICE"
+                    else -> "你的价格"
+                }, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.5f))
                 Text(text = "$$price", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
             }
             Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.White.copy(alpha = 0.2f))
             Column {
-                Text(text = if (isEnglish) "AVG FOR AREA" else "该区平均", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.5f))
+                Text(text = when {
+                    isSpanish -> "PROMEDIO DEL ÁREA"
+                    isEnglish -> "AVG FOR AREA"
+                    else -> "该区平均"
+                }, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.5f))
                 Text(text = "$$avg", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
             }
         }
@@ -252,7 +300,8 @@ fun RentAnalysisCardView(data: Map<String, Any>, isEnglish: Boolean) {
 }
 
 @Composable
-fun TheSceneDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
+fun TheSceneDashboardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val vibe = data["vibe"] as? String
     val narrative = data["narrative"] as? String
     val events = data["events"] as? List<Map<String, Any>> ?: emptyList()
@@ -278,7 +327,11 @@ fun TheSceneDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = if (isEnglish) "THE SCENE" else "社群氛围",
+                    text = when {
+                        isSpanish -> "LA ESCENA"
+                        isEnglish -> "THE SCENE"
+                        else -> "社群氛围"
+                    },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF9C27B0),
@@ -313,7 +366,11 @@ fun TheSceneDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
                     Icon(Icons.Default.Event, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = if (isEnglish) "UPCOMING EVENTS" else "近期活动",
+                        text = when {
+                            isSpanish -> "PRÓXIMOS EVENTOS"
+                            isEnglish -> "UPCOMING EVENTS"
+                            else -> "近期活动"
+                        },
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White.copy(alpha = 0.5f)
@@ -373,7 +430,11 @@ fun TheSceneDashboardView(data: Map<String, Any>, isEnglish: Boolean) {
                     Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = if (isEnglish) "TOP VENUES" else "热门地点",
+                        text = when {
+                            isSpanish -> "LUGARES DESTACADOS"
+                            isEnglish -> "TOP VENUES"
+                            else -> "热门地点"
+                        },
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White.copy(alpha = 0.5f)

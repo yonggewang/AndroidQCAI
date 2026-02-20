@@ -117,7 +117,7 @@ private val LocalAccentOrange = Color(0xFFFF9500) // Added for Portfolio/Risk
 private val LocalBackgroundGray = Color(0xFFF2F2F7) // System grouped background
 
 @Composable
-fun StockScreen(onOpenSettings: () -> Unit = {}) {
+fun StockScreen(onBack: (() -> Unit)? = null) {
     var selectedTab by remember { mutableStateOf(0) }
     // Use global preference manager for the key
     val geminiKey = PreferenceManager.geminiKey
@@ -134,6 +134,11 @@ fun StockScreen(onOpenSettings: () -> Unit = {}) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = LocalCyberBlue)
+                }
+            }
             Text(
                 "AI Stock Insight", 
                 style = MaterialTheme.typography.headlineMedium,
@@ -172,9 +177,9 @@ fun StockScreen(onOpenSettings: () -> Unit = {}) {
         // Content
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == 0) {
-                SingleStockView(geminiKey, onOpenSettings)
+                SingleStockView(geminiKey)
             } else {
-                PortfolioRiskView(geminiKey, onOpenSettings)
+                PortfolioRiskView(geminiKey)
             }
         }
     }
@@ -197,7 +202,7 @@ fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifier: 
 }
 
 @Composable
-fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
+fun SingleStockView(geminiKey: String) {
     var symbol by remember { mutableStateOf("GOOG") }
     var quote by remember { mutableStateOf<QuoteResponse?>(null) }
     var aiResponse by remember { mutableStateOf("") }
@@ -224,187 +229,206 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-            .verticalScroll(scrollState),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
-        // Trending Row
-        if (trending.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("🔥 Trending Now", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                androidx.compose.foundation.lazy.LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    items(trending.size) { i ->
-                        val item = trending[i]
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            shape = RoundedCornerShape(8.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            modifier = Modifier.clickable { 
-                                symbol = item.symbol 
-                                // Auto search
-                                scope.launch {
-                                    try {
-                                        isLoading = true // optional visual
-                                        quote = RetrofitClient.api.getQuote(symbol)
-                                        report = RetrofitClient.api.getReport(symbol)
-                                    } catch(_: Exception) {}
-                                    finally { isLoading = false }
-                                }
-                            }
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp)) {
-                                Text(item.symbol, fontWeight = FontWeight.Bold)
-                                Text(
-                                    "${if(item.changePct >=0) "+" else ""}${String.format("%.1f", item.changePct)}%", 
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (item.changePct >= 0) Color(0xFF34C759) else Color(0xFFFF3B30)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Search Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(), 
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Scrollable Content
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            OutlinedTextField(
-                value = symbol,
-                onValueChange = { symbol = it.uppercase() },
-                label = { Text("Ticker (e.g. NVDA)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White
-                )
-            )
-            Button(
-                onClick = {
-
-                    scope.launch {
-                         try {
-                             quote = RetrofitClient.api.getQuote(symbol)
-                             report = RetrofitClient.api.getReport(symbol)
-                         } catch (e: Exception) {
-                             aiResponse = "Error: ${e.message}"
-                         }
-                    }
-                },
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = LocalCyberBlue),
-                modifier = Modifier.height(56.dp)
-            ) {
-                 Icon(Icons.Default.Search, contentDescription = null)
-            }
-        }
-
-        // Quote Display & AI Actions
-        quote?.let { q ->
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            // Trending Row
+            if (trending.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("🔥 Trending Now", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
                     ) {
-                        Text(symbol, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        Text("$${String.format("%.2f", q.c)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "H: ${String.format("%.2f", q.h)}  L: ${String.format("%.2f", q.l)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray
-                        )
-                        Text(
-                            "${String.format("%.2f", q.dp)}%",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (q.dp >= 0) Color(0xFF34C759) else Color(0xFFFF3B30) // iOS Green/Red
-                        )
-                    }
-                    
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
-                    
-                    Divider(modifier = Modifier.padding(vertical = 12.dp))
-                    
-                    // Stock Report Card
-                    report?.let { r ->
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { showScoreInfo = true },
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                        items(trending.size) { i ->
+                            val item = trending[i]
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                modifier = Modifier.clickable { 
+                                    symbol = item.symbol 
+                                    scope.launch {
+                                        try {
+                                            isLoading = true 
+                                            quote = RetrofitClient.api.getQuote(symbol)
+                                            report = RetrofitClient.api.getReport(symbol)
+                                        } catch(_: Exception) {}
+                                        finally { isLoading = false }
+                                    }
+                                }
                             ) {
-                                Text("Stock Report Card", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Icon(Icons.Default.Info, contentDescription = "Info", tint = LocalCyberBlue, modifier = Modifier.size(18.dp))
-                            }
-                            
-                            ScoreRow("Valuation", r.valuationScore, r.valuationMsg)
-                            ScoreRow("Safety", r.safetyScore, r.safetyMsg)
-                            ScoreRow("Trend", r.trendScore, r.trendMsg)
-                        }
-                        Divider(modifier = Modifier.padding(vertical = 12.dp))
-                    }
-                    
-                    // Deep Dive Analysis Button
-                    TextButton(
-                        onClick = {
-
-                            isLoading = true
-                            scope.launch {
-                                try {
-                                    val result = RetrofitClient.api.explainStock(geminiKey, symbol)
-                                    aiResponse = result.explanation
-                                } catch (e: Exception) {
-                                    aiResponse = "Error: ${e.message}"
-                                } finally {
-                                    isLoading = false
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(item.symbol, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "${if(item.changePct >=0) "+" else ""}${String.format("%.1f", item.changePct)}%", 
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (item.changePct >= 0) Color(0xFF34C759) else Color(0xFFFF3B30)
+                                    )
                                 }
                             }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = LocalCyberPurple),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(LocalCyberPurple.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Deep Dive Analysis")
+                        }
                     }
                 }
             }
             
-            // Ask AI Analyst
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Ask AI Analyst", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    "Ask questions like 'What is their latest earnings report?' or 'Why is it down today?'",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+            // Search Bar
+            Row(
+                modifier = Modifier.fillMaxWidth(), 
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = symbol,
+                    onValueChange = { symbol = it.uppercase() },
+                    label = { Text("Ticker (e.g. NVDA)") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
+                    )
                 )
+                Button(
+                    onClick = {
+                        scope.launch {
+                             try {
+                                 quote = RetrofitClient.api.getQuote(symbol)
+                                 report = RetrofitClient.api.getReport(symbol)
+                             } catch (e: Exception) {
+                                 aiResponse = "Error: ${e.message}"
+                             }
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = LocalCyberBlue),
+                    modifier = Modifier.height(56.dp)
+                ) {
+                     Icon(Icons.Default.Search, contentDescription = null)
+                }
+            }
+
+            // Quote Display & AI Actions
+            quote?.let { q ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(symbol, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            Text("$${String.format("%.2f", q.c)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "H: ${String.format("%.2f", q.h)}  L: ${String.format("%.2f", q.l)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
+                            Text(
+                                "${String.format("%.2f", q.dp)}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (q.dp >= 0) Color(0xFF34C759) else Color(0xFFFF3B30)
+                            )
+                        }
+                        
+                        Divider(modifier = Modifier.padding(vertical = 12.dp))
+                        
+                        report?.let { r ->
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clickable { showScoreInfo = true },
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Stock Report Card", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.Info, contentDescription = "Info", tint = LocalCyberBlue, modifier = Modifier.size(18.dp))
+                                }
+                                
+                                ScoreRow("Valuation", r.valuationScore, r.valuationMsg)
+                                ScoreRow("Safety", r.safetyScore, r.safetyMsg)
+                                ScoreRow("Trend", r.trendScore, r.trendMsg)
+                            }
+                            Divider(modifier = Modifier.padding(vertical = 12.dp))
+                        }
+                        
+                        TextButton(
+                            onClick = {
+                                isLoading = true
+                                scope.launch {
+                                    try {
+                                        val result = RetrofitClient.api.explainStock(geminiKey, symbol)
+                                        aiResponse = result.explanation
+                                    } catch (e: Exception) {
+                                        aiResponse = "Error: ${e.message}"
+                                    } finally {
+                                        isLoading = false
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = LocalCyberPurple),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(LocalCyberPurple.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Deep Dive Analysis")
+                        }
+                    }
+                }
+            }
+            
+            // AI Response Card (Moved into Scrollable Area)
+            if (aiResponse.isNotEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = LocalCyberBlue.copy(alpha = 0.1f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        aiResponse,
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.Black
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(20.dp))
+        }
+
+        // Sticky Bottom Input Area
+        Surface(
+            shadowElevation = 8.dp,
+            color = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .imePadding(), // Ensure keyboard pushes it up
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Ask AI Analyst", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 
                 OutlinedTextField(
                     value = userQuestion,
                     onValueChange = { userQuestion = it },
-                    placeholder = { Text("Question...") },
+                    placeholder = { Text("Ask about earnings, news, etc...") },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.White,
@@ -414,7 +438,6 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                 
                 Button(
                     onClick = {
-
                         isLoading = true
                         scope.launch {
                             try {
@@ -436,19 +459,6 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
                     } else {
                         Text("Analyze")
-                    }
-                }
-                
-                if (aiResponse.isNotEmpty()) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = LocalCyberBlue.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            aiResponse,
-                            modifier = Modifier.padding(16.dp),
-                            color = Color.Black
-                        )
                     }
                 }
             }
@@ -476,8 +486,6 @@ fun SingleStockView(geminiKey: String, onOpenSettings: () -> Unit) {
                 }
             )
         }
-        
-        Spacer(Modifier.height(40.dp))
     }
 }
 
@@ -512,7 +520,7 @@ fun ScoreRow(title: String, score: Int, msg: String) {
 }
 
 @Composable
-fun PortfolioRiskView(geminiKey: String, onOpenSettings: () -> Unit) {
+fun PortfolioRiskView(geminiKey: String) {
     var holdingsInput by remember { mutableStateOf("AAPL, MSFT, TSLA, GOOG") }
     // Ideally use DataStore to persist 'holdingsInput'
     var riskResponse by remember { mutableStateOf<RiskResponse?>(null) }

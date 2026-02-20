@@ -130,6 +130,7 @@ class AIService {
                 ]
                 """.trimIndent()
                 AITopic.STOCK -> "\nCurrent Mode: Stock Analyst."
+                AITopic.NONE -> "\nCurrent Mode: General Assistant."
             }
         } else {
             when (topic) {
@@ -159,6 +160,7 @@ class AIService {
                 请立即开始为您服务：
                 """.trimIndent()
                 AITopic.STOCK -> "\n当前模式：股票分析师。"
+                AITopic.NONE -> "\n当前模式：通用助手。"
             }
         }
         

@@ -1,7 +1,7 @@
 package com.quantumproperty.qcai.data
 
 enum class AppLanguage {
-    CHINESE, ENGLISH
+    CHINESE, ENGLISH, SPANISH
 }
 
 enum class AIEngine(val rawValue: String) {
@@ -20,7 +20,8 @@ enum class AITopic(val chineseName: String, val englishName: String, val id: Str
     LIFE("本地生活", "Local Life", "life"),
     MISC("杂项", "Misc", "misc"),
     CLT_VIBE("夏洛特 Vibe", "CLT Vibe", "cltVibe"),
-    STOCK("AI 股市透视", "AI Stock Analysis", "stock")
+    STOCK("AI 股市透视", "AI Stock Analysis", "stock"),
+    NONE("无", "None", "none")
 }
 
 data class Recommendation(
@@ -44,8 +45,10 @@ data class ChatMessage(
 
 data class HotToolItem(
     val id: String = java.util.UUID.randomUUID().toString(),
+    val icon: String = "",
     val chineseName: String,
     val englishName: String,
+    val spanishName: String = "",
     val url: String
 )
 
@@ -55,6 +58,7 @@ data class TopMenuItem(
     val chineseName: String,
     val chineseUrl: String,
     val englishUrl: String,
+    val spanishUrl: String = "",
     val topic: AITopic
 )
 
