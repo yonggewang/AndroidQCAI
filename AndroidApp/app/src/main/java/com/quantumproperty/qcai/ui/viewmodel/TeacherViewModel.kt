@@ -651,6 +651,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         saveVibeHistory()
     }
 
+    fun clearMessages() {
+        _messages.value = emptyList()
+        _recommendations.value = emptyList()
+    }
+
     fun setLanguage(language: AppLanguage) {
         _appLanguage.value = language
         // Immediately refresh current URL and topic if needed
@@ -903,7 +908,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     _displayMode.value = DisplayMode.WEB
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
                 }
-                AITopic.CLT_VIBE, AITopic.STOCK, AITopic.NONE -> {
+                AITopic.CLT_VIBE, AITopic.STOCK, AITopic.NONE, AITopic.BUSINESS -> {
                     _displayMode.value = DisplayMode.CHAT
                 }
             }
@@ -946,10 +951,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun sendMessage(text: String, image: Bitmap? = null, customPrompt: String? = null) {
+    fun sendMessage(text: String, image: Bitmap? = null, customPrompt: String? = null, explicitTopic: AITopic? = null) {
         // No local key check needed - all queries route through backend which has server-side keys
+        
+        val activeTopic = explicitTopic ?: _selectedTopic.value
 
-        _displayMode.value = DisplayMode.CHAT
+        if (activeTopic != AITopic.CLT_VIBE && activeTopic != AITopic.STOCK) {
+             _displayMode.value = DisplayMode.CHAT
+        }
         val newUserMsg = ChatMessage(text = text, isUser = true)
         _messages.value = _messages.value + newUserMsg
         _isLoading.value = true
@@ -964,6 +973,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     val chatResponse = com.quantumproperty.qcai.data.CityOSService.instance.queryChat(
                         question = text,
                         engine = _selectedEngine.value.name,
+                        topic = activeTopic.id,
                         userAddress = com.quantumproperty.qcai.data.PreferenceManager.homeAddress,
                         language = if (_appLanguage.value == AppLanguage.CHINESE) "zh" else "en",
                         customPrompt = customPrompt  // Pass custom prompt if provided
@@ -977,7 +987,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                         responseText = aiService.sendMessage(
                             text = text,
                             engine = _selectedEngine.value,
-                            topic = _selectedTopic.value,
+                            topic = activeTopic,
                             language = _appLanguage.value,
                             image = image
                         )
@@ -999,7 +1009,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 val aiMsg = ChatMessage(text = displayText, isUser = false, extraData = extraData)
                 _messages.value = _messages.value + aiMsg
                 
-                if (_selectedTopic.value == AITopic.CLT_VIBE) {
+                if (activeTopic == AITopic.CLT_VIBE) {
                     parseRecommendations(responseText)
                 }
                 

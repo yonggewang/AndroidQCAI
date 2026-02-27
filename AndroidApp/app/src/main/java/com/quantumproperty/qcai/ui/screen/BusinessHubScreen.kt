@@ -44,10 +44,12 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.BUSINESS)
         marketplaceViewModel.loadItems()
     }
     
     val isRecording by viewModel.isRecording.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     val messages by viewModel.messages.collectAsState()
     val lastAIMessage = messages.lastOrNull { !it.isUser && !it.isHidden }
@@ -151,7 +153,7 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
             }
 
             // 1.5 AI Response (Business Assistant)
-            lastAIMessage?.let { msg ->
+            if (isLoading || lastAIMessage != null) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -166,22 +168,66 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
                                 fontSize = 18.sp
                             )
                             Spacer(Modifier.weight(1f))
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFFFF9500), modifier = Modifier.size(16.dp))
+                            if (!isLoading) {
+                                IconButton(
+                                    onClick = { viewModel.clearMessages() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                                }
+                            } else {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFFFF9500), modifier = Modifier.size(16.dp))
+                            }
                         }
+                        
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color.White.copy(alpha = 0.05f),
+                            color = Color.Transparent,
                             shape = RoundedCornerShape(24.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9500).copy(alpha = 0.3f))
                         ) {
-                            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                val displayText = msg.text.split("MATCH_SCORE_JSON")[0].trim()
-                                Text(
-                                    text = displayText,
-                                    fontSize = 15.sp,
-                                    lineHeight = 24.sp,
-                                    color = Color.White.copy(alpha = 0.95f)
-                                )
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFF2196F3).copy(alpha = 0.2f),
+                                                Color(0xFF9C27B0).copy(alpha = 0.2f)
+                                            )
+                                        )
+                                    )
+                                    .padding(24.dp)
+                            ) {
+                                if (isLoading) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = Color(0xFFFF9500),
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Text(
+                                            text = when {
+                                                isSpanish -> "QCAI está pensando..."
+                                                isEnglish -> "QCAI is thinking..."
+                                                else -> "QCAI 正在思考..."
+                                            },
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                } else {
+                                    val displayText = lastAIMessage!!.text.split("MATCH_SCORE_JSON")[0].trim()
+                                    Text(
+                                        text = displayText,
+                                        fontSize = 15.sp,
+                                        lineHeight = 24.sp,
+                                        color = Color.White.copy(alpha = 0.95f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -227,6 +273,79 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
                                     viewModel.openProfessionalProfile(context, pro.id)
                                 }
                             )
+                        }
+                    }
+                }
+            }
+
+            // 2.5 AI RESOURCE CENTER
+            item {
+                Text(
+                    text = if (isEnglish) "AI Resource Center" else "AI 资源中心",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Local AI Jobs
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFFF9500).copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9500).copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).clickable { BrowserUtils.openURL(context, "https://yonggewang.github.io/ainews/aijobs.html") },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Work, null, tint = Color(0xFFFF9500), modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isEnglish) "Local AI Jobs" else "本地 AI 职位",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (isEnglish) "Discover the latest AI opportunities." else "发现最新的 AI 机会。",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.3f))
+                        }
+                    }
+
+                    // LLM Expert Knowledge
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF007AFF).copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF007AFF).copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).clickable { BrowserUtils.openURL(context, "https://yonggewang.github.io/llminfo.html") },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.MenuBook, null, tint = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isEnglish) "LLM Expert Knowledge" else "LLM 专家知识库",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (isEnglish) "Models, hardware & performance guides." else "模型、硬件与性能指南。",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.3f))
                         }
                     }
                 }
@@ -317,11 +436,11 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
                 }
             }
 
-            // 5. MARKETPLACE INTEGRATION
+            // 5. MARKETPLACE
             item {
-                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().clickable { viewModel.showMarketplaceView() }) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(), 
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -335,60 +454,51 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
-                         Text(
-                            text = when {
-                                isSpanish -> "Ver Todo >"
-                                isEnglish -> "View All >"
-                                else -> "查看全部 >"
-                            },
-                            color = Color(0xFF007AFF),
-                            fontSize = 14.sp,
-                            modifier = Modifier.clickable { 
-                                viewModel.showMarketplaceView()
-                            }
-                        )
+                        Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.5f))
                     }
-                    Text(
-                        text = when {
-                            isSpanish -> "Comprar, Contratar o Alquilar — Todo AI"
-                            isEnglish -> "Buy, Hire, or Rent — Everything AI"
-                            else -> "购买、雇佣或租用 — AI一切"
-                        },
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 11.sp
-                    )
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        color = Color(0xFFFF9500).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9500).copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.size(48.dp).background(Color(0xFFFF9500), androidx.compose.foundation.shape.CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Storefront, null, tint = Color.White)
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = when {
+                                        isSpanish -> "Comprar, Contratar o Alquilar"
+                                        isEnglish -> "Buy, Hire, or Rent"
+                                        else -> "购买、雇佣或租用"
+                                    },
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Text(
+                                    text = when {
+                                        isSpanish -> "Explora el Mercado de IA Local"
+                                        isEnglish -> "Explore the Local AI Marketplace"
+                                        else -> "探索本地 AI 市场"
+                                    },
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
-            
-            // Marketplace Preview List
-             item {
-                 if (isMarketLoading) {
-                     Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                         CircularProgressIndicator(color = Color(0xFFFF9500))
-                     }
-                 } else if (marketItems.isEmpty()) {
-                     Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                         Text(
-                             text = when {
-                                 isSpanish -> "No se encontraron artículos"
-                                 isEnglish -> "No items found"
-                                 else -> "暂无商品"
-                             },
-                             color = Color.White.copy(alpha = 0.5f)
-                         )
-                     }
-                 } else {
-                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                         items(marketItems.take(5)) { item ->
-                             MarketplacePreviewCard(item) {
-                                 // Handle marketplace item click (e.g., share/email or open details)
-                                 // For now, let's open a generic contact or search for it
-                                 BrowserUtils.openURL(context, "https://www.google.com/search?q=${item.title}")
-                             }
-                         }
-                     }
-                 }
-             }
              
              // 6. COMMUNITY EVENTS
              item {
@@ -456,7 +566,7 @@ fun BusinessHubScreen(viewModel: TeacherViewModel) {
         }
         
             TextInputArea(
-                onSend = { viewModel.sendMessage(it) },
+                onSend = { viewModel.sendMessage(it, explicitTopic = com.quantumproperty.qcai.data.AITopic.BUSINESS) },
                 onCameraClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                          cameraLauncher.launch()

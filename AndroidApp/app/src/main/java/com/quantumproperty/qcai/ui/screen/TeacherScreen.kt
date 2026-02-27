@@ -973,7 +973,7 @@ fun UserQuickSettingsSheet(
                     icon = Icons.Default.QuestionMark,
                     text = if (isEnglish) "Help & Support" else "帮助与支持",
                     onClick = {
-                        val helpUrl = if (isEnglish) "https://www.queencityai.net" else "https://www.queencityai.net/static/index_cn.html"
+                        val helpUrl = if (isEnglish) "https://queencityai.net" else "https://queencityai.net/static/index_cn.html"
                         BrowserUtils.openURL(context, helpUrl)
                         onDismiss()
                     }
@@ -1102,6 +1102,7 @@ fun TopicButton(
             AITopic.CLT_VIBE -> Icons.Default.AutoAwesome
             AITopic.STOCK -> Icons.Default.ShowChart
             AITopic.NONE -> Icons.Default.Dashboard
+            AITopic.BUSINESS -> Icons.Default.BusinessCenter
         }
     }
     

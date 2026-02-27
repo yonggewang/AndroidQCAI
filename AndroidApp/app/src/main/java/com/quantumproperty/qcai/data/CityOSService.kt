@@ -14,12 +14,12 @@ class CityOSService {
     // Android Emulator uses 10.0.2.2 for localhost
     // PROD: https://cyberpandaapp.com/city
     
-    private val baseUrl = "https://cyberpandaapp.com/city"
+    private val baseUrl = "https://queencityai.net/city"
     private val aiNewsUrl = "https://yonggewang.github.io/ainews/summary.json"
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(45, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
         .build()
 
     private val gson = Gson()
@@ -74,6 +74,7 @@ class CityOSService {
     suspend fun queryChat(
         question: String,
         engine: String? = null,
+        topic: String? = null,
         userAddress: String? = null,
         language: String? = "en",
         customPrompt: String? = null  // For specialized queries like Property Analysis
@@ -82,6 +83,7 @@ class CityOSService {
         val bodyMap = mutableMapOf(
             "question" to question,
             "engine" to (engine ?: "Gemini"),
+            "topic" to (topic ?: ""),
             "user_address" to (userAddress ?: ""),
             "language" to (language ?: "en")
         )

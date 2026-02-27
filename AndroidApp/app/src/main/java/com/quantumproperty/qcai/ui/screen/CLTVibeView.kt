@@ -68,6 +68,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
     var worthItInput by remember { mutableStateOf("") }
     
     val isRecording by viewModel.isRecording.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -83,7 +84,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap != null) {
             val prompt = if (isEnglish) "Please analyze this image for local vibe insights." else "请结合本地氛围分析这张图片。"
-            viewModel.sendMessage(prompt, image = bitmap)
+            viewModel.sendMessage(prompt, image = bitmap, explicitTopic = AITopic.CLT_VIBE)
         }
     }
 
@@ -103,6 +104,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
     }
     
     LaunchedEffect(Unit) { 
+        viewModel.setTopic(AITopic.CLT_VIBE)
         launch { ChatConfigManager.instance.fetchConfig() }
         launch { viewModel.fetchDailyBrief() }
     }
@@ -213,8 +215,8 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                 }
             }
 
-            // 2. Expert Intel (AI Response)
-            lastAIMessage?.let { msg ->
+            // 2. Expert Intel (AI Response / Loading)
+            if (isLoading || lastAIMessage != null) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -231,31 +233,69 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                             Spacer(Modifier.weight(1f))
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF9D50BB), modifier = Modifier.size(16.dp))
                         }
+                        
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color.White.copy(alpha = 0.05f),
+                            color = Color.Transparent,
                             shape = RoundedCornerShape(24.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF9D50BB).copy(alpha = 0.3f))
                         ) {
-                            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                val displayText = msg.text.split("MATCH_SCORE_JSON")[0].trim()
-                                Text(
-                                    text = displayText,
-                                    fontSize = 15.sp,
-                                    lineHeight = 24.sp,
-                                    color = Color.White.copy(alpha = 0.95f)
-                                )
-
-                                // Visual Decision Cards
-                                msg.extraData?.let { extra ->
-                                    val type = extra["type"] as? String
-                                    Divider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
-                                    
-                                    when (type) {
-                                        "worth_it" -> WorthItScorecardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
-                                        "reality_check" -> RealityCheckDashboardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
-                                        "rent_analysis" -> RentAnalysisCardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
-                                        "the_scene" -> TheSceneDashboardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFF2196F3).copy(alpha = 0.2f),
+                                                Color(0xFFE91E63).copy(alpha = 0.2f)
+                                            )
+                                        )
+                                    )
+                                    .padding(24.dp)
+                            ) {
+                                if (isLoading) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = Color(0xFF9D50BB),
+                                            modifier = Modifier.size(32.dp),
+                                            strokeWidth = 3.dp
+                                        )
+                                        Text(
+                                            text = when {
+                                                isSpanish -> "QCAI está pensando..."
+                                                isEnglish -> "QCAI is thinking..."
+                                                else -> "QCAI 正在思考..."
+                                            },
+                                            color = Color.White.copy(alpha = 0.9f),
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        val displayText = lastAIMessage!!.text.split("MATCH_SCORE_JSON")[0].trim()
+                                        Text(
+                                            text = displayText,
+                                            fontSize = 15.sp,
+                                            lineHeight = 24.sp,
+                                            color = Color.White.copy(alpha = 0.95f)
+                                        )
+        
+                                        // Visual Decision Cards
+                                        lastAIMessage.extraData?.let { extra ->
+                                            val type = extra["type"] as? String
+                                            Divider(color = Color.White.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 8.dp))
+                                            
+                                            when (type) {
+                                                "worth_it" -> WorthItScorecardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                                                "reality_check" -> RealityCheckDashboardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                                                "rent_analysis" -> RentAnalysisCardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                                                "the_scene" -> TheSceneDashboardView(data = extra, isSpanish = isSpanish, isEnglish = isEnglish)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -382,7 +422,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                                     color = Color.White.copy(alpha = 0.05f),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth().clickable {
-                                        viewModel.sendMessage("[$energyLevelLabel Energy] ${suggestion.prompt.localized(isEnglish)}")
+                                        viewModel.sendMessage("[$energyLevelLabel Energy] ${suggestion.prompt.localized(isEnglish)}", explicitTopic = AITopic.CLT_VIBE)
                                     }
                                 ) {
                                     Row(
@@ -521,7 +561,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                             onClick = {
                                 if (worthItInput.isNotBlank()) {
                                     val prompt = "Is $worthItInput worth it? Give me a verdict and local hacks."
-                                    viewModel.sendMessage("[$energyLevelLabel Energy] $prompt")
+                                    viewModel.sendMessage("[$energyLevelLabel Energy] $prompt", explicitTopic = AITopic.CLT_VIBE)
                                     worthItInput = ""
                                 }
                             }
@@ -538,7 +578,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                                 color = Color.White.copy(alpha = 0.05f),
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.clickable {
-                                    viewModel.sendMessage("[$energyLevelLabel Energy] Is $spot worth it?")
+                                    viewModel.sendMessage("[$energyLevelLabel Energy] Is $spot worth it?", explicitTopic = AITopic.CLT_VIBE)
                                 }
                             ) {
                                 Text(
@@ -596,7 +636,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.clickable {
                                         val prompt = if (isEnglish) "What's the $cat scene like in Charlotte?" else "夏洛特的 $cat 氛围怎么样？"
-                                        viewModel.sendMessage("[$energyLevelLabel Energy] $prompt")
+                                        viewModel.sendMessage("[$energyLevelLabel Energy] $prompt", explicitTopic = AITopic.CLT_VIBE)
                                     }
                                 ) {
                                     Text(
@@ -693,7 +733,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
         }
         
             TextInputArea(
-                onSend = { viewModel.sendMessage(it) },
+                onSend = { viewModel.sendMessage(it, explicitTopic = AITopic.CLT_VIBE) },
                 onCameraClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                          cameraLauncher.launch()
