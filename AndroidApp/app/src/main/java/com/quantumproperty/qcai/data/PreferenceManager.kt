@@ -48,4 +48,25 @@ object PreferenceManager {
     var homeAddress: String
         get() = prefs.getString(KEY_HOME_ADDRESS, "") ?: ""
         set(value) = prefs.edit().putString(KEY_HOME_ADDRESS, value).apply()
+
+    private const val KEY_TS_AUTH = "ts_auth_key"
+    private const val KEY_TS_HOST = "ts_hostname"
+    private const val KEY_TS_PORT = "ts_gateway_port"
+    private const val KEY_TS_TOKEN = "ts_gateway_token"
+
+    var tailscaleAuthKey: String
+        get() = prefs.getString(KEY_TS_AUTH, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_TS_AUTH, value).apply()
+
+    var tailscaleHostname: String
+        get() = prefs.getString(KEY_TS_HOST, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_TS_HOST, value).apply()
+
+    var tailscaleGatewayPort: String
+        get() = prefs.getString(KEY_TS_PORT, "443") ?: "443"
+        set(value) = prefs.edit().putString(KEY_TS_PORT, value).apply()
+
+    var tailscaleGatewayToken: String
+        get() = prefs.getString(KEY_TS_TOKEN, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_TS_TOKEN, value).apply()
 }

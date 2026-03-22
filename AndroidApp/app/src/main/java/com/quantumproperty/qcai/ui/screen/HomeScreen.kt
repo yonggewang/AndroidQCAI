@@ -29,7 +29,6 @@ fun HomeScreen(viewModel: TeacherViewModel) {
     val isSpanish = appLanguage == AppLanguage.SPANISH
 
     val dailyBrief by viewModel.currentDailyBrief.collectAsState(initial = null)
-    val scope = rememberCoroutineScope()
     
     LaunchedEffect(Unit) { 
         viewModel.fetchDailyBrief() 

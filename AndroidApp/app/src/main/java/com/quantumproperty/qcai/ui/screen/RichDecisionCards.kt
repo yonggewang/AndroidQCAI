@@ -25,7 +25,9 @@ import androidx.compose.ui.unit.sp
 fun WorthItScorecardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: Boolean) {
     val score = (data["score"] as? Double)?.toInt() ?: (data["score"] as? Int) ?: 70
     val verdict = data["verdict"] as? String ?: "Worth it"
+    @Suppress("UNCHECKED_CAST")
     val pros = data["pros"] as? List<String> ?: emptyList()
+    @Suppress("UNCHECKED_CAST")
     val cons = data["cons"] as? List<String> ?: emptyList()
     val hack = data["hack"] as? String
 
@@ -301,10 +303,11 @@ fun RentAnalysisCardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: 
 
 @Composable
 fun TheSceneDashboardView(data: Map<String, Any>, isSpanish: Boolean, isEnglish: Boolean) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val vibe = data["vibe"] as? String
     val narrative = data["narrative"] as? String
+    @Suppress("UNCHECKED_CAST")
     val events = data["events"] as? List<Map<String, Any>> ?: emptyList()
+    @Suppress("UNCHECKED_CAST")
     val venues = data["venues"] as? List<Map<String, Any>> ?: emptyList()
 
     Column(

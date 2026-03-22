@@ -65,7 +65,7 @@ android {
 }
 
 dependencies {
-
+    // Native libraries are loaded automatically from jniLibs
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
@@ -108,4 +108,15 @@ dependencies {
     
     // In-App Browser Support
     implementation("androidx.browser:browser:1.8.0")
+    
+    // Cryptography (Ed25519)
+    implementation("com.google.crypto.tink:tink-android:1.13.0")
+
+    // CameraX and ML Kit (QR Scanner)
+    val camerax_version = "1.3.1"
+    implementation("androidx.camera:camera-camera2:$camerax_version")
+    implementation("androidx.camera:camera-lifecycle:$camerax_version")
+    implementation("androidx.camera:camera-view:$camerax_version")
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    implementation("com.google.guava:guava:31.0.1-android")
 }

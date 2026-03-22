@@ -255,8 +255,8 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
             viewModel.closeNewsLocalLife()
         } else if (selectedTab == 3 && viewModel.selectedTopic.value == com.quantumproperty.qcai.data.AITopic.STOCK) {
              viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.NONE)
-        } else if (selectedTab != 0) {
-            viewModel.setSelectedTab(0)
+        } else if (selectedTab != 1) { // Changed from 0 to 1 because CLT AI is now Tab 1
+            viewModel.setSelectedTab(1)
         } else {
             // Finish activity (Quit App)
             (context as? android.app.Activity)?.finish()
@@ -281,38 +281,38 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
                 containerColor = Color(0xFF121212), // Solid dark background for better contrast
                 tonalElevation = 8.dp
             ) {
-                // 0. Home
+                // 0. OpenClaw (Previously Home)
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "OpenClaw") },
                     label = { 
                         Text(
                             when {
-                                isSpanish -> "Inicio"
-                                isEnglish -> "Home"
-                                else -> "首页"
+                                isSpanish -> "Gateway"
+                                isEnglish -> "OpenClaw"
+                                else -> "网关"
                             }
                         ) 
                     },
                     selected = selectedTab == 0,
                     onClick = { viewModel.setSelectedTab(0) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFAF52DE),
-                        selectedTextColor = Color(0xFFAF52DE),
+                        selectedIconColor = Color(0xFF007AFF),
+                        selectedTextColor = Color(0xFF007AFF),
                         unselectedIconColor = Color.White.copy(alpha = 0.5f),
                         unselectedTextColor = Color.White.copy(alpha = 0.5f),
-                        indicatorColor = Color(0xFFAF52DE).copy(alpha = 0.15f)
+                        indicatorColor = Color(0xFF007AFF).copy(alpha = 0.15f)
                     )
                 )
                 
-                // 1. Business Hub
+                // 1. CLT AI Hub (Previously Business Hub)
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.BusinessCenter, contentDescription = "Hub") },
+                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "CLT AI") },
                     label = { 
                         Text(
                             when {
-                                isSpanish -> "Negocios"
-                                isEnglish -> "Business"
-                                else -> "商务"
+                                isSpanish -> "CLT AI"
+                                isEnglish -> "CLT AI"
+                                else -> "AI 中心"
                             }
                         ) 
                     },
@@ -405,8 +405,8 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 when (page) {
-                    0 -> HomeScreen(viewModel)
-                    1 -> BusinessHubScreen(viewModel)
+                    0 -> OpenClawScreen(viewModel)
+                    1 -> CLTAIHubScreen(viewModel)
                     2 -> CLTVibeView(viewModel)
                     3 -> AIToolkitScreen(viewModel)
                     4 -> NewsLocalLifeView(viewModel) {

@@ -1,5 +1,6 @@
 package com.quantumproperty.qcai.ui.viewmodel
 
+import com.quantumproperty.qcai.utils.BrowserUtils
 import android.app.Application
 import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
@@ -25,6 +26,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
+import com.quantumproperty.qcai.data.OpenClawService
+import com.quantumproperty.qcai.data.ConnectionState
+import com.quantumproperty.qcai.data.GatewayMetrics
+import android.content.Intent
+import android.content.Context
+import android.content.ClipboardManager
+import android.content.ClipData
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 
 enum class DisplayMode {
     WEB, CHAT
@@ -107,6 +117,40 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _apiKeySetupReason = MutableStateFlow<String?>(null)
     val apiKeySetupReason = _apiKeySetupReason.asStateFlow()
+
+    // OpenClaw States
+    private val openClawService = OpenClawService.instance
+    private val _openClawState = MutableStateFlow(ConnectionState.DISCONNECTED)
+    val openClawState = _openClawState.asStateFlow()
+    
+    val gatewayAuthKey = MutableStateFlow("")
+    val gatewayHostname = MutableStateFlow("")
+    val gatewayPort = MutableStateFlow("443")
+    val gatewayToken = MutableStateFlow("")
+    
+    private val _openClawMetrics = MutableStateFlow(GatewayMetrics())
+    val openClawMetrics = _openClawMetrics.asStateFlow()
+
+    private val _openClawError = MutableStateFlow<String?>(null)
+    val openClawError = _openClawError.asStateFlow()
+
+    private val _isPairingRequired = MutableStateFlow(false)
+    val isPairingRequired = _isPairingRequired.asStateFlow()
+
+    private val _deviceId = MutableStateFlow("")
+    val deviceId = _deviceId.asStateFlow()
+
+    private val _showQRScanner = MutableStateFlow(false)
+    val showQRScanner = _showQRScanner.asStateFlow()
+
+    private val _showJoinGatewayDialog = MutableStateFlow(false)
+    val showJoinGatewayDialog = _showJoinGatewayDialog.asStateFlow()
+
+    private val _showSetupGuide = MutableStateFlow(false)
+    val showSetupGuide = _showSetupGuide.asStateFlow()
+
+    private val _showConfigPreview = MutableStateFlow(false)
+    val showConfigPreview = _showConfigPreview.asStateFlow()
 
     private val _hotListItems = MutableStateFlow<List<HotToolItem>>(emptyList())
     // Allow observing raw items if needed, but UI should likely use userSpecificTools
@@ -432,6 +476,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     init {
         PreferenceManager.init(application)
         
+        // Load Tailscale settings (Must be AFTER PreferenceManager.init)
+        gatewayAuthKey.value = PreferenceManager.tailscaleAuthKey
+        gatewayHostname.value = PreferenceManager.tailscaleHostname
+        gatewayPort.value = PreferenceManager.tailscaleGatewayPort
+        gatewayToken.value = PreferenceManager.tailscaleGatewayToken
+
+        startTailscaleMonitoring()
+        
         // Load engine from preferences
         try {
             _selectedEngine.value = AIEngine.valueOf(PreferenceManager.selectedEngine)
@@ -443,6 +495,20 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _speechRate.value = PreferenceManager.speechRate
         _speechPitch.value = PreferenceManager.speechPitch
         ttsManager?.updateConfig(_speechRate.value, _speechPitch.value)
+
+        // Persist Tailscale settings when they change
+        viewModelScope.launch {
+            gatewayAuthKey.collect { PreferenceManager.tailscaleAuthKey = it }
+        }
+        viewModelScope.launch {
+            gatewayHostname.collect { PreferenceManager.tailscaleHostname = it }
+        }
+        viewModelScope.launch {
+            gatewayPort.collect { PreferenceManager.tailscaleGatewayPort = it }
+        }
+        viewModelScope.launch {
+            gatewayToken.collect { PreferenceManager.tailscaleGatewayToken = it }
+        }
         
         // Initial URL setup
         // Initial URL setup
@@ -548,6 +614,34 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+        
+        // Initialize OpenClaw Service
+        openClawService.init(application)
+
+        // OpenClaw Listener
+        openClawService.addListener(object : OpenClawService.OpenClawListener {
+            override fun onStateChanged(state: ConnectionState) {
+                _openClawState.value = state
+                if (state == ConnectionState.CONNECTED) {
+                    _isGatewayLinked.value = true
+                    _isPairingRequired.value = false
+                }
+            }
+            override fun onMetricsUpdated(metrics: GatewayMetrics) {
+                _openClawMetrics.value = metrics
+            }
+            override fun onPairingRequired(deviceId: String) {
+                // Show Step 4 or a notice
+                _isPairingRequired.value = true
+                _isGatewayLinked.value = false
+                _deviceId.value = deviceId
+            }
+            override fun onError(message: String) {
+                _openClawError.value = message
+                // Don't show full screen alert for minor websocket errors, just a toast or log
+                android.util.Log.e("TeacherViewModel", "OpenClaw Error: $message")
+            }
+        })
         
         loadVibeHistory()
     }
@@ -1424,6 +1518,304 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _errorMessage.value = message
     }
 
+    // OpenClaw Actions
+    fun connectOpenClaw(host: String? = null, port: Int? = null, token: String? = null) {
+        openClawService.connect(host, port, token)
+    }
+
+    fun disconnectOpenClaw() {
+        openClawService.disconnect()
+    }
+
+    fun dismissOpenClawError() {
+        _openClawError.value = null
+    }
+
+    // OpenClaw UI States for Screen Parity
+    private val _isGatewayLinked = MutableStateFlow(false)
+    val isGatewayLinked = _isGatewayLinked.asStateFlow()
+    
+    private val _isTunnelConnected = MutableStateFlow(false)
+    val isTunnelConnected = _isTunnelConnected.asStateFlow()
+    
+    private val _gatewayCommand = MutableStateFlow("openclaw gateway --tailscale serve")
+    val gatewayCommand = _gatewayCommand.asStateFlow()
+    
+    private val _tunnelIP = MutableStateFlow("100.x.x.x")
+    val tunnelIP = _tunnelIP.asStateFlow()
+
+    
+    private val _isConnecting = MutableStateFlow(false)
+    val isConnecting = _isConnecting.asStateFlow()
+    
+    private val _gatewayLinkError = MutableStateFlow<String?>(null)
+    val gatewayLinkError = _gatewayLinkError.asStateFlow()
+
+    private var tailscalePoller: Job? = null
+
+    private fun startTailscaleMonitoring() {
+        tailscalePoller?.cancel()
+        tailscalePoller = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                checkTailscaleStatus()
+                kotlinx.coroutines.delay(2000)
+            }
+        }
+    }
+
+    private fun checkTailscaleStatus() {
+        try {
+            if (com.quantumproperty.qcai.native.TailscaleBridge.isReady()) {
+                val ip = com.quantumproperty.qcai.native.TailscaleBridge.getIPAddress()
+                viewModelScope.launch(Dispatchers.Main) {
+                    if (ip.startsWith("100.")) {
+                        _tunnelIP.value = ip
+                        _isTunnelConnected.value = true
+                    } else {
+                        // Only disconnect if we aren't actively trying to connect
+                        if (!_isConnecting.value) {
+                            _isTunnelConnected.value = false
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Internal Bridge (tsnet) - PRODUCTION INTEGRATION
+    fun connectTunnel() {
+        if (!com.quantumproperty.qcai.native.TailscaleBridge.isReady()) {
+            _errorMessage.value = "Production Build Error: Native Tailscale library (.so) not found in jniLibs."
+            return
+        }
+
+        val authKey = gatewayAuthKey.value
+        val hostname = gatewayHostname.value.takeIf { it.isNotBlank() } ?: "qcai-android"
+        val stateDir = java.io.File(getApplication<Application>().filesDir, "tailscale").absolutePath
+
+        _isConnecting.value = true
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val ip = com.quantumproperty.qcai.native.TailscaleBridge.start(authKey, hostname, stateDir)
+                withContext(Dispatchers.Main) {
+                    _isConnecting.value = false
+                    if (ip.startsWith("100.")) {
+                        _isTunnelConnected.value = true
+                        _tunnelIP.value = ip
+                    } else {
+                        _errorMessage.value = "Tailscale Connection Failed: Verify Auth Key & Permissions"
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isConnecting.value = false
+                    _errorMessage.value = "Native Error: ${e.message}"
+                }
+            }
+        }
+    }
+
+    fun disconnectTunnel() {
+        if (com.quantumproperty.qcai.native.TailscaleBridge.isReady()) {
+            com.quantumproperty.qcai.native.TailscaleBridge.stop()
+        }
+        _isTunnelConnected.value = false
+        _tunnelIP.value = "100.x.x.x"
+    }
+
+    fun linkGateway() {
+        val host = gatewayHostname.value.trim()
+        val port = gatewayPort.value.toIntOrNull() ?: 443
+        val token = gatewayToken.value.trim()
+        
+        if (host.isEmpty()) {
+            _errorMessage.value = "Please enter a gateway address or paste a setup code."
+            return
+        }
+        
+        openClawService.connect(host, port, token)
+    }
+
+    fun unlinkGateway() {
+        openClawService.disconnect()
+        _isGatewayLinked.value = false
+    }
+
+    fun pasteSetupCode() {
+        val clipboard = getApplication<Application>().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = clipboard.primaryClip
+        if (clip != null && clip.itemCount > 0) {
+            val code = clip.getItemAt(0).text?.toString() ?: ""
+            parseAndApplySetupCode(code)
+        }
+    }
+
+    fun toggleQRScanner(show: Boolean) {
+        _showQRScanner.value = show
+    }
+
+    fun toggleJoinGatewayDialog(show: Boolean) {
+        _showJoinGatewayDialog.value = show
+    }
+
+    fun toggleSetupGuide(show: Boolean) {
+        _showSetupGuide.value = show
+    }
+
+    fun toggleConfigPreview(show: Boolean) {
+        _showConfigPreview.value = show
+    }
+
+    val openClawConfigJson = """
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.13",
+    "lastTouchedAt": "2026-03-15T02:39:40.890Z"
+  },
+  "models": {
+    "providers": {
+      "openai": {
+        "baseUrl": "http://127.0.0.1:1234/v1",
+        "auth": "api-key",
+        "api": "openai-responses",
+        "models": [
+          {
+            "id": "llm",
+            "name": "Local Qwen 3.5",
+            "contextWindow": 131072
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "openai/llm",
+      "compaction": {
+        "mode": "safeguard"
+      }
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "1234567890:ABCDEFGHIJKLMN_OPQRSTUVWXYZ",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "groupPolicy": "open",
+      "streaming": "partial"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "controlUi": {
+      "allowedOrigins": [
+        "*"
+      ],
+      "dangerouslyAllowHostHeaderOriginFallback": true
+    },
+    "auth": {
+      "mode": "token",
+      "token": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    },
+    "trustedProxies": [
+      "127.0.0.1",
+      "::1",
+      "100.0.0.0/8"
+    ]
+  },
+  "plugins": {
+    "entries": {
+      "device-pair": {
+        "enabled": true
+      }
+    }
+  }
+}
+    """.trimIndent()
+
+    fun applySetupCode(code: String) {
+        val cleanCode = code.trim()
+        if (cleanCode.isNotEmpty()) {
+            parseAndApplySetupCode(cleanCode)
+        }
+    }
+
+    private fun parseAndApplySetupCode(code: String) {
+        val trimmed = code.trim()
+        if (trimmed.length < 50) {
+            // Already a plain token? 
+            gatewayToken.value = trimmed
+            return
+        }
+
+        try {
+            // Replicate iOS logic: padding if needed
+            val padded = when (trimmed.length % 4) {
+                2 -> "$trimmed=="
+                3 -> "$trimmed="
+                else -> trimmed
+            }
+            val data = android.util.Base64.decode(padded, android.util.Base64.DEFAULT)
+            val json = org.json.JSONObject(String(data))
+            
+            val urlString = json.optString("url")
+            if (urlString.isNotEmpty()) {
+                val uri = android.net.Uri.parse(urlString)
+                gatewayHostname.value = uri.host ?: ""
+                val port = uri.port
+                if (port != -1) {
+                    gatewayPort.value = port.toString()
+                } else {
+                    val scheme = uri.scheme?.lowercase() ?: "ws"
+                    val host = uri.host ?: ""
+                    gatewayPort.value = if (scheme == "wss" || scheme == "https" || host.contains(".ts.net")) "443" else "443"
+                }
+            }
+            
+            val token = json.optString("bootstrapToken", json.optString("token"))
+            if (token.isNotEmpty()) {
+                gatewayToken.value = token
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Fallback: just treat as token
+            gatewayToken.value = trimmed
+        }
+    }
+
+    fun openWebConsole() {
+        val host = gatewayHostname.value.trim()
+        val port = gatewayPort.value.toIntOrNull() ?: 443
+        val token = gatewayToken.value.trim()
+        val isSecure = port == 443 || host.contains(".ts.net")
+        val scheme = if (isSecure) "https" else "http"
+        val portPart = if (port == 443 || port == 80) "" else ":$port"
+        val url = "$scheme://$host$portPart/?token=$token"
+        BrowserUtils.openURL(getApplication(), url)
+    }
+    
     override fun onCleared() {
         super.onCleared()
         speechManager?.destroy()

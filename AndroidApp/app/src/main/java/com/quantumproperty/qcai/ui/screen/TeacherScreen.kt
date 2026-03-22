@@ -127,8 +127,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
 
     if (showAPIKeySetup) {
         APIKeySetupDialog(
-            onDismiss = { viewModel.dismissAPIKeySetup() },
-            onSave = { viewModel.dismissAPIKeySetup() }
+            onDismiss = { viewModel.dismissAPIKeySetup() }
         )
     }
 

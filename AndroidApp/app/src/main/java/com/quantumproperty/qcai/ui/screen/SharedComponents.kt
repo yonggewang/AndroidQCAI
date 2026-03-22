@@ -287,7 +287,7 @@ fun RegisterDialog(
 }
 
 @Composable
-fun APIKeySetupDialog(onDismiss: () -> Unit, onSave: () -> Unit) {
+fun APIKeySetupDialog(onDismiss: () -> Unit) {
     // Deprecated or moved logic
     AlertDialog(
         onDismissRequest = onDismiss,

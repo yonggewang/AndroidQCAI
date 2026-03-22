@@ -167,7 +167,7 @@ fun TheSceneScreen(
                                 )
                             }
                             items(data.events) { event ->
-                                AndroidEventRow(event, isSpanish, isEnglish)
+                                AndroidEventRow(event)
                             }
                         }
 
@@ -186,7 +186,7 @@ fun TheSceneScreen(
                                 )
                             }
                             items(data.venues) { venue ->
-                                AndroidVenueRow(venue, isSpanish, isEnglish)
+                                AndroidVenueRow(venue)
                             }
                         }
                         
@@ -227,7 +227,7 @@ fun CategoryChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun AndroidEventRow(event: SceneEvent, isSpanish: Boolean, isEnglish: Boolean) {
+fun AndroidEventRow(event: SceneEvent) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.White.copy(alpha = 0.03f),
@@ -272,7 +272,7 @@ fun AndroidEventRow(event: SceneEvent, isSpanish: Boolean, isEnglish: Boolean) {
 }
 
 @Composable
-fun AndroidVenueRow(venue: SceneVenue, isSpanish: Boolean, isEnglish: Boolean) {
+fun AndroidVenueRow(venue: SceneVenue) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.White.copy(alpha = 0.03f),

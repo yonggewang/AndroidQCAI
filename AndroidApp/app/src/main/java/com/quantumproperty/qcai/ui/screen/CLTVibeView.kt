@@ -961,9 +961,6 @@ fun DailyBriefingHeader(
     var newsExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
     
-    val isEnglish = appLanguage == com.quantumproperty.qcai.data.AppLanguage.ENGLISH
-    val isSpanish = appLanguage == com.quantumproperty.qcai.data.AppLanguage.SPANISH
-    
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = when (appLanguage) {
