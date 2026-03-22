@@ -39,3 +39,4 @@ build/
 # Android App
 app/google-services.json
 app/build/
+app/release/
