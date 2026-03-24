@@ -72,6 +72,8 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
     val showTheSceneView by viewModel.showTheSceneView.collectAsState()
     val showNewsLocalLife by viewModel.showNewsLocalLifeView.collectAsState()
     val showProfileDialog by viewModel.showProfileDialog.collectAsState()
+    val showContextOSView by viewModel.showContextOSView.collectAsState()
+    val showGatewayChat by viewModel.showGatewayChat.collectAsState()
 
     // --- Dialogs ---
 
@@ -184,6 +186,26 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
     val showAIRoadmapView by viewModel.showAIRoadmapView.collectAsState()
     val aiRoadmapResponse by viewModel.aiRoadmapResponse.collectAsState()
 
+    if (showContextOSView) {
+        Dialog(
+            onDismissRequest = { viewModel.closeContextOS() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                ContextOSScreen(onBack = { viewModel.closeContextOS() })
+            }
+        }
+    }
+
+    if (showGatewayChat) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { viewModel.closeGatewayChat() },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            OpenClawChatScreen(viewModel = viewModel, onBack = { viewModel.closeGatewayChat() })
+        }
+    }
+
     if (showAIRoadmapView) {
         Dialog(
             onDismissRequest = { viewModel.closeAIRoadmap() },
@@ -253,6 +275,10 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
             viewModel.closeTheSceneView()
         } else if (showNewsLocalLife) {
             viewModel.closeNewsLocalLife()
+        } else if (showContextOSView) {
+            viewModel.closeContextOS()
+        } else if (showGatewayChat) {
+            viewModel.closeGatewayChat()
         } else if (selectedTab == 3 && viewModel.selectedTopic.value == com.quantumproperty.qcai.data.AITopic.STOCK) {
              viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.NONE)
         } else if (selectedTab != 1) { // Changed from 0 to 1 because CLT AI is now Tab 1

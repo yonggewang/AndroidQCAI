@@ -13,6 +13,12 @@ import java.net.Proxy
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -42,6 +48,8 @@ class OpenClawService private constructor() {
         .create()
     private val handler = Handler(Looper.getMainLooper())
     private var appContext: Context? = null
+    
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     var connectionState = ConnectionState.DISCONNECTED
     var isConnected = false
@@ -57,12 +65,53 @@ class OpenClawService private constructor() {
     private val TAG = "OpenClawService"
     private val pendingRequests = ConcurrentHashMap<String, (String?, String?) -> Unit>()
 
+    // Gateway Chat Data Models (Matching iOS v5.1)
+    data class ChatEvent(
+        val runId: String,
+        val sessionKey: String,
+        val seq: Int,
+        val state: String,
+        val message: ChatMessagePayload? = null,
+        val errorMessage: String? = null
+    )
+
+    data class ChatMessagePayload(
+        val role: String? = null,
+        @com.google.gson.annotations.SerializedName("content") val content: List<ContentBlock>? = null
+    ) {
+        data class ContentBlock(
+            val type: String? = null,
+            val text: String? = null
+        )
+
+        val plainText: String
+            get() = content?.mapNotNull { it.text }?.joinToString("\n") ?: ""
+    }
+
+    data class ChatHistoryResponse(
+        val sessionKey: String,
+        val messages: List<HistoryMessage>? = null
+    )
+
+    data class HistoryMessage(
+        val role: String,
+        val content: List<ChatMessagePayload.ContentBlock>? = null,
+        val timestamp: Long? = null
+    ) {
+        val plainText: String
+            get() = content?.mapNotNull { it.text }?.joinToString("\n") ?: ""
+    }
+
     interface OpenClawListener {
         fun onStateChanged(state: ConnectionState)
         fun onMetricsUpdated(metrics: GatewayMetrics)
         fun onPairingRequired(deviceId: String)
+        fun onChatEvent(event: ChatEvent)
         fun onError(message: String)
     }
+
+    private val _latestInsight = MutableStateFlow<String?>(null)
+    val latestInsight = _latestInsight.asStateFlow()
 
     private val listeners = mutableListOf<OpenClawListener>()
 
@@ -232,7 +281,31 @@ class OpenClawService private constructor() {
                 }
             }
 
-            // 4. Handle metrics update
+            // 5. Handle Chat Events (v5.1)
+            if (event == "chat") {
+                val payload = json.getAsJsonObject("payload")
+                if (payload != null) {
+                    val chatEvent = gson.fromJson(payload, ChatEvent::class.java)
+                    listeners.forEach { it.onChatEvent(chatEvent) }
+                    
+                    // Expose latest feedback for AI Insight Card
+                    val content = chatEvent.message?.plainText
+                    if (!content.isNullOrBlank()) {
+                        val trimmed = content.trim()
+                        
+                        // If it's a delta and it matches the HEARTBEAT_OK prefix, don't show it yet
+                        if (chatEvent.state == "streaming" && "HEARTBEAT_OK".startsWith(trimmed)) {
+                            // Suppress heartbeat prefixes from flashing (HE, HEAR...)
+                        } else {
+                            if (chatEvent.state == "final" || chatEvent.state == "streaming") {
+                                _latestInsight.value = content
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Handle metrics update
             if (event == "metrics") {
                 val payload = json.getAsJsonObject("payload")
                 metrics = GatewayMetrics(
@@ -258,15 +331,15 @@ class OpenClawService private constructor() {
         val payload = listOf(
             "v3",
             deviceId,
-            "openclaw-ios",
+            "openclaw-android",
             "cli",
             "operator",
             "operator.admin",
             signedAtMs.toString(),
             gatewayToken.trim(),
             nonce,
-            "ios",
-            "iphone"
+            "android",
+            "phone"
         ).joinToString("|")
 
         Log.d(TAG, "Signing Challenge Payload: $payload")
@@ -278,11 +351,11 @@ class OpenClawService private constructor() {
         
         // Use explicit JsonObject to ensure perfect serialization
         val clientObj = JsonObject().apply {
-            addProperty("id", "openclaw-ios")
-            addProperty("displayName", "iPhone (${deviceId.take(6)})")
+            addProperty("id", "openclaw-android")
+            addProperty("displayName", "Android (${deviceId.take(6)})")
             addProperty("version", "2026.3.13")
-            addProperty("platform", "ios")
-            addProperty("deviceFamily", "iphone")
+            addProperty("platform", "android")
+            addProperty("deviceFamily", "phone")
             addProperty("mode", "cli")
         }
 
@@ -332,7 +405,7 @@ class OpenClawService private constructor() {
         webSocket?.send(gson.toJson(request))
     }
 
-    suspend fun callRpc(method: String, params: Map<String, Any>? = null): String = suspendCoroutine { continuation ->
+    suspend fun callRpc(method: String, params: Any? = null): String = suspendCoroutine { continuation ->
         val id = UUID.randomUUID().toString()
         val request = mapOf(
             "type" to "req",
@@ -352,6 +425,101 @@ class OpenClawService private constructor() {
         if (webSocket?.send(gson.toJson(request)) != true) {
             pendingRequests.remove(id)
             continuation.resumeWithException(Exception("WebSocket not connected"))
+        }
+    }
+
+    /**
+     * Sends a chat message to the gateway using the chat.send RPC.
+     */
+    suspend fun sendChatMessage(sessionKey: String, message: String) {
+        val params = mapOf(
+            "sessionKey" to sessionKey,
+            "idempotencyKey" to UUID.randomUUID().toString(),
+            "message" to message
+        )
+        callRpc("chat.send", params)
+    }
+
+    /**
+     * High-level helper to send a message to the default chat session.
+     */
+    fun sendGatewayMessage(text: String) {
+        if (!isConnected) return
+        
+        // Use our serviceScope for the RPC call
+        handler.post {
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    sendChatMessage("agent:main:main", text)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to send gateway message: ${e.message}")
+                }
+            }
+        }
+    }
+
+    suspend fun autoInstallQCAI(agentId: String = "main", soul: String, heartbeat: String, tools: String) {
+        // Master System Runtime Specification (v5.2) - Unified Workspace
+        // Gateway whitelist: SOUL.md, HEARTBEAT.md, TOOLS.md, IDENTITY.md, USER.md, etc.
+        // STYLE and SKILLS content is embedded inside SOUL.md.
+        // QCAI_Proactive skill content goes into TOOLS.md (whitelisted).
+        callRpc("agents.files.set", mapOf(
+            "agentId" to agentId,
+            "name" to "SOUL.md",
+            "content" to soul
+        ))
+        callRpc("agents.files.set", mapOf(
+            "agentId" to agentId,
+            "name" to "HEARTBEAT.md",
+            "content" to heartbeat
+        ))
+        callRpc("agents.files.set", mapOf(
+            "agentId" to agentId,
+            "name" to "TOOLS.md",
+            "content" to tools
+        ))
+    }
+
+    fun syncContext(context: ContextObject) {
+        if (!isConnected) return
+        
+        val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(java.util.Date())
+        
+        val eventCount = context.temporalIntelligence.upcomingEvents.size
+        val stress = context.userState.stressScore
+        val activity = context.userState.activity.value.name
+        
+        // Detailed platform telemetry for parity with iOS
+        val contextEngine = ContextEngine.getInstance(appContext ?: return)
+        val locStatus = if (contextEngine.locationEnabled) (if (context.userState.location != null) "YES" else "DENIED") else "OFF"
+        val healthStatus = if (contextEngine.healthEnabled) "YES" else "OFF"
+        val motionStatus = if (contextEngine.motionEnabled) "YES" else "OFF"
+        
+        Log.d(TAG, "📤 [OpenClawService] Syncing Context v5.5: $eventCount events | Activity: $activity | Stress: ${String.format("%.2f", stress)} | Loc: $locStatus | Health: $healthStatus | Motion: $motionStatus")
+
+        val json = gson.toJson(context)
+        val message = """
+            [CONTEXT_SYNC] $timestamp
+            Follow your SOUL.md identity and HEARTBEAT.md execution rules.
+            v5.5 Deep Context Planning: Synthesize my vitals (hrv=${context.userState.activity.vitals?.hrv ?: 0}), location, and 7-day outlook into Proactive Value.
+            - If P < 0.2: Reply HEARTBEAT_OK
+            - If P >= 0.2: Provide a Strategic Affirmation or a 7-Day Planning Insight (Visual Template SOUL.md §4).
+            Max 280 characters.
+            
+            $json
+        """.trimIndent()
+        
+        handler.post {
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    sendChatMessage("agent:main:main", message)
+                    Log.d(TAG, "✅ Sent Context Sync (v5.5 via Chat)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Failed Context Sync: ${e.message}")
+                }
+            }
         }
     }
 

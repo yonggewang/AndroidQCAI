@@ -12,8 +12,8 @@ android {
         applicationId = "com.quantumproperty.qcai"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.2.0"
+        versionCode = 13
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -55,6 +55,9 @@ android {
         kotlinCompilerExtensionVersion = "1.5.14" // Upgrade to match 1.9.20+ better (1.5.1 might be too old for 1.9.20)
     }
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -108,15 +111,22 @@ dependencies {
     
     // In-App Browser Support
     implementation("androidx.browser:browser:1.8.0")
+
+    // Location & Async
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // WorkManager (Background Sync)
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     
     // Cryptography (Ed25519)
     implementation("com.google.crypto.tink:tink-android:1.13.0")
 
     // CameraX and ML Kit (QR Scanner)
-    val camerax_version = "1.3.1"
+    val camerax_version = "1.4.0"
     implementation("androidx.camera:camera-camera2:$camerax_version")
     implementation("androidx.camera:camera-lifecycle:$camerax_version")
     implementation("androidx.camera:camera-view:$camerax_version")
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("com.google.guava:guava:31.0.1-android")
 }

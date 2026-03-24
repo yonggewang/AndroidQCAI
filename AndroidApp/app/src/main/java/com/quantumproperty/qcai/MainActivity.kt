@@ -19,6 +19,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Schedule Context OS Background Sync
+        com.quantumproperty.qcai.service.BackgroundSyncWorker.schedule(this)
+        
         // Request Notification Permission for Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val launcher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -63,15 +66,22 @@ class MainActivity : ComponentActivity() {
             var hasCompletedOnboarding by remember {
                 mutableStateOf(sharedPreferences.getBoolean("hasCompletedOnboarding", false))
             }
+            var showSplash by remember { mutableStateOf(true) }
             
             MaterialTheme {
                 Surface {
-                    if (hasCompletedOnboarding) {
-                        MainScreen()
+                    if (showSplash) {
+                        com.quantumproperty.qcai.ui.screen.SplashScreen(onTimeout = { 
+                            showSplash = false 
+                        })
                     } else {
-                        com.quantumproperty.qcai.ui.screen.WelcomeScreen {
-                            sharedPreferences.edit().putBoolean("hasCompletedOnboarding", true).apply()
-                            hasCompletedOnboarding = true
+                        if (hasCompletedOnboarding) {
+                            MainScreen()
+                        } else {
+                            com.quantumproperty.qcai.ui.screen.WelcomeScreen {
+                                sharedPreferences.edit().putBoolean("hasCompletedOnboarding", true).apply()
+                                hasCompletedOnboarding = true
+                            }
                         }
                     }
                 }

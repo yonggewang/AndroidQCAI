@@ -133,6 +133,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _openClawError = MutableStateFlow<String?>(null)
     val openClawError = _openClawError.asStateFlow()
+    
+    val autoConnectGateway = MutableStateFlow(false)
+    private var reconnectAttempt = 0
 
     private val _isPairingRequired = MutableStateFlow(false)
     val isPairingRequired = _isPairingRequired.asStateFlow()
@@ -145,6 +148,34 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _showJoinGatewayDialog = MutableStateFlow(false)
     val showJoinGatewayDialog = _showJoinGatewayDialog.asStateFlow()
+
+    private val _gatewayMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val gatewayMessages = _gatewayMessages.asStateFlow()
+
+    private val _gatewayStreamingText = MutableStateFlow<String?>(null)
+    val gatewayStreamingText = _gatewayStreamingText.asStateFlow()
+
+    private val _showGatewayChat = MutableStateFlow(false)
+    val showGatewayChat = _showGatewayChat.asStateFlow()
+
+    // OpenClaw UI States for Screen Parity
+    private val _isGatewayLinked = MutableStateFlow(false)
+    val isGatewayLinked = _isGatewayLinked.asStateFlow()
+
+    private val _isTunnelConnected = MutableStateFlow(false)
+    val isTunnelConnected = _isTunnelConnected.asStateFlow()
+    
+    private val _gatewayCommand = MutableStateFlow("pm2 start openclaw --name gateway -- gateway --tailscale serve")
+    val gatewayCommand = _gatewayCommand.asStateFlow()
+    
+    private val _tunnelIP = MutableStateFlow("100.x.x.x")
+    val tunnelIP = _tunnelIP.asStateFlow()
+
+    private val _isConnecting = MutableStateFlow(false)
+    val isConnecting = _isConnecting.asStateFlow()
+    
+    private val _gatewayLinkError = MutableStateFlow<String?>(null)
+    val gatewayLinkError = _gatewayLinkError.asStateFlow()
 
     private val _showSetupGuide = MutableStateFlow(false)
     val showSetupGuide = _showSetupGuide.asStateFlow()
@@ -209,6 +240,17 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     fun closeAIRoadmap() {
         _showAIRoadmapView.value = false
         _aiRoadmapResponse.value = null // Clear state to allow retaking survey next time
+    }
+
+    private val _showContextOSView = MutableStateFlow(false)
+    val showContextOSView = _showContextOSView.asStateFlow()
+
+    fun openContextOS() {
+        _showContextOSView.value = true
+    }
+
+    fun closeContextOS() {
+        _showContextOSView.value = false
     }
 
     fun submitAISurvey(response: com.quantumproperty.qcai.data.SurveyResponse) {
@@ -481,6 +523,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         gatewayHostname.value = PreferenceManager.tailscaleHostname
         gatewayPort.value = PreferenceManager.tailscaleGatewayPort
         gatewayToken.value = PreferenceManager.tailscaleGatewayToken
+        autoConnectGateway.value = PreferenceManager.autoConnectGateway
 
         startTailscaleMonitoring()
         
@@ -508,6 +551,25 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             gatewayToken.collect { PreferenceManager.tailscaleGatewayToken = it }
+        }
+        viewModelScope.launch {
+            autoConnectGateway.collect { PreferenceManager.autoConnectGateway = it }
+        }
+        
+        // Context OS periodic sync loop
+        viewModelScope.launch {
+            while (true) {
+                if (_isGatewayLinked.value) {
+                    try {
+                        val engine = com.quantumproperty.qcai.data.ContextEngine.getInstance(application)
+                        val contextData = engine.ingest()
+                        openClawService.syncContext(contextData)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                kotlinx.coroutines.delay(60_000L) // every 60s
+            }
         }
         
         // Initial URL setup
@@ -623,8 +685,34 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
             override fun onStateChanged(state: ConnectionState) {
                 _openClawState.value = state
                 if (state == ConnectionState.CONNECTED) {
+                    reconnectAttempt = 0
                     _isGatewayLinked.value = true
                     _isPairingRequired.value = false
+                    
+                    // Fire an initial sync right upon connection
+                    viewModelScope.launch {
+                        try {
+                            val engine = com.quantumproperty.qcai.data.ContextEngine.getInstance(application)
+                            val contextData = engine.ingest()
+                            openClawService.syncContext(contextData)
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
+                } else if (state == ConnectionState.DISCONNECTED) {
+                    _isGatewayLinked.value = false
+                    _isPairingRequired.value = false
+                    
+                    if (autoConnectGateway.value) {
+                        viewModelScope.launch {
+                            val shift = reconnectAttempt.coerceAtMost(4)
+                            val delayMs = (5000L * (1 shl shift)).coerceAtMost(60000L) // 5s, 10s, 20s, 40s, 60s
+                            reconnectAttempt++
+                            
+                            kotlinx.coroutines.delay(delayMs)
+                            if (autoConnectGateway.value && !_isGatewayLinked.value) {
+                                linkGateway()
+                            }
+                        }
+                    }
                 }
             }
             override fun onMetricsUpdated(metrics: GatewayMetrics) {
@@ -635,6 +723,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 _isPairingRequired.value = true
                 _isGatewayLinked.value = false
                 _deviceId.value = deviceId
+            }
+            override fun onChatEvent(event: OpenClawService.ChatEvent) {
+                viewModelScope.launch {
+                    handleChatEvent(event)
+                }
             }
             override fun onError(message: String) {
                 _openClawError.value = message
@@ -1531,25 +1624,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _openClawError.value = null
     }
 
-    // OpenClaw UI States for Screen Parity
-    private val _isGatewayLinked = MutableStateFlow(false)
-    val isGatewayLinked = _isGatewayLinked.asStateFlow()
-    
-    private val _isTunnelConnected = MutableStateFlow(false)
-    val isTunnelConnected = _isTunnelConnected.asStateFlow()
-    
-    private val _gatewayCommand = MutableStateFlow("openclaw gateway --tailscale serve")
-    val gatewayCommand = _gatewayCommand.asStateFlow()
-    
-    private val _tunnelIP = MutableStateFlow("100.x.x.x")
-    val tunnelIP = _tunnelIP.asStateFlow()
 
-    
-    private val _isConnecting = MutableStateFlow(false)
-    val isConnecting = _isConnecting.asStateFlow()
-    
-    private val _gatewayLinkError = MutableStateFlow<String?>(null)
-    val gatewayLinkError = _gatewayLinkError.asStateFlow()
 
     private var tailscalePoller: Job? = null
 
@@ -1667,6 +1742,84 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleConfigPreview(show: Boolean) {
         _showConfigPreview.value = show
+    }
+
+    // --- Gateway Chat Helpers ---
+
+    fun openGatewayChat() {
+        _showGatewayChat.value = true
+        if (_gatewayMessages.value.isEmpty()) {
+            loadChatHistory()
+        }
+    }
+
+    private fun loadChatHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val responseJson = openClawService.callRpc("chat.history", mapOf("sessionKey" to "agent:main:main"))
+                val history = com.google.gson.Gson().fromJson(responseJson, OpenClawService.ChatHistoryResponse::class.java)
+                history.messages?.let { msgs ->
+                    val mapped = msgs.map { 
+                        ChatMessage(
+                            text = it.plainText,
+                            isUser = it.role == "user"
+                        )
+                    }
+                    withContext(Dispatchers.Main) {
+                        _gatewayMessages.value = mapped
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TeacherViewModel", "Failed to load chat history: ${e.message}")
+            }
+        }
+    }
+
+    fun closeGatewayChat() {
+        _showGatewayChat.value = false
+    }
+
+    fun sendGatewayChat(text: String) {
+        if (text.isBlank()) return
+        
+        // Add User Message
+        val userMsg = ChatMessage(text = text, isUser = true)
+        _gatewayMessages.value = _gatewayMessages.value + userMsg
+        
+        // Send via Service
+        openClawService.sendGatewayMessage(text)
+    }
+
+    fun clearGatewayChat() {
+        _gatewayMessages.value = emptyList()
+        _gatewayStreamingText.value = null
+    }
+
+    private fun handleChatEvent(event: OpenClawService.ChatEvent) {
+        // Only process events for the main agent session to avoid crosstalk
+        if (event.sessionKey != "agent:main:main") return
+        
+        // Log event for debugging
+        android.util.Log.d("TeacherViewModel", "Received ChatEvent: seq=${event.seq}, state=${event.state}")
+
+        if (event.state == "streaming") {
+            val streamText = event.message?.plainText
+            if (streamText != "HEARTBEAT_OK") {
+                _gatewayStreamingText.value = streamText
+            }
+        } else if (event.state == "final") {
+            val finalContent = event.message?.plainText
+            if (!finalContent.isNullOrBlank() && finalContent.trim() != "HEARTBEAT_OK") {
+                val aiMsg = ChatMessage(text = finalContent, isUser = false)
+                _gatewayMessages.value = _gatewayMessages.value + aiMsg
+            }
+            _gatewayStreamingText.value = null
+        } else if (event.state == "error") {
+             val errorMsg = event.errorMessage ?: "Unknown Gateway Error"
+             val aiMsg = ChatMessage(text = "Error: $errorMsg", isUser = false)
+             _gatewayMessages.value = _gatewayMessages.value + aiMsg
+             _gatewayStreamingText.value = null
+        }
     }
 
     val openClawConfigJson = """

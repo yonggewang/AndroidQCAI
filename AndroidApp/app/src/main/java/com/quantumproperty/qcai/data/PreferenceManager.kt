@@ -69,4 +69,9 @@ object PreferenceManager {
     var tailscaleGatewayToken: String
         get() = prefs.getString(KEY_TS_TOKEN, "") ?: ""
         set(value) = prefs.edit().putString(KEY_TS_TOKEN, value).apply()
+    private const val KEY_AUTO_CONNECT = "auto_connect_gateway"
+
+    var autoConnectGateway: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_CONNECT, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_CONNECT, value).apply()
 }

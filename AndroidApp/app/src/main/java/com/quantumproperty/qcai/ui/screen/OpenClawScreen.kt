@@ -72,6 +72,7 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
     val showJoinGatewayDialog by viewModel.showJoinGatewayDialog.collectAsState()
     val showSetupGuide by viewModel.showSetupGuide.collectAsState()
     val showConfigPreview by viewModel.showConfigPreview.collectAsState()
+    val autoConnectGateway by viewModel.autoConnectGateway.collectAsState()
 
     var isGatewayExpanded by remember { mutableStateOf(!isConnected) }
     val context = LocalContext.current
@@ -199,25 +200,27 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
                                 title = if (isEnglish) "Web Console" else if (isSpanish) "Consola Web" else "Web 控制台",
                                 subtitle = if (isEnglish) "Monitor & Manage" else if (isSpanish) "Monitorear y Gestionar" else "监控与管理",
                                 icon = Icons.Default.Public,
-                                color = Color(0xFF34C759), // Teal-ish
+                                color = Color(0xFF34C759), // Green
                                 modifier = Modifier.weight(1f),
                                 onClick = { viewModel.openWebConsole() }
                             )
                             ManagementCard(
-                                title = if (isEnglish) "AI Workflows" else if (isSpanish) "Flujos de IA" else "AI 工作流",
-                                subtitle = if (isEnglish) "Automate Tasks" else if (isSpanish) "Automatizar Tareas" else "自动化任务",
-                                icon = Icons.Default.AutoAwesome,
-                                color = Color(0xFFAF52DE), // Purple
-                                modifier = Modifier.weight(1f),
-                                onClick = { /* viewModel.activeSheet = .workflowBuilder */ }
-                            )
-                            ManagementCard(
-                                title = if (isEnglish) "Services" else if (isSpanish) "Servicios" else "服务连接",
-                                subtitle = if (isEnglish) "Manage API Keys" else if (isSpanish) "Gestionar Claves API" else "管理 API 密钥",
-                                icon = Icons.Default.Link,
+                                title = if (isEnglish) "Context OS" else if (isSpanish) "Contexto OS" else "系统环境",
+                                subtitle = if (isEnglish) "AI Sensors" else if (isSpanish) "Sensores de IA" else "AI 传感器",
+                                icon = Icons.Default.Psychology,
                                 color = Color(0xFF007AFF), // Blue
                                 modifier = Modifier.weight(1f),
-                                onClick = { /* viewModel.activeSheet = .serviceConnections */ }
+                                onClick = { viewModel.openContextOS() }
+                            )
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ManagementCard(
+                                title = if (isEnglish) "Gateway Chat" else if (isSpanish) "Chat de Pasarela" else "网关对话",
+                                subtitle = if (isEnglish) "Direct LLM Link" else if (isSpanish) "Enlace LLM Directo" else "LLM 直接链接",
+                                icon = Icons.Default.Chat,
+                                color = Color(0xFFAF52DE), // Purple
+                                modifier = Modifier.weight(1f),
+                                onClick = { viewModel.openGatewayChat() }
                             )
                         }
                     }
@@ -266,6 +269,29 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
                         if (isGatewayExpanded) {
                             Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
                                 
+                                // Persistent Connection Toggle
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = Color.White,
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(if (isEnglish) "Persistent Connection" else if (isSpanish) "Conexión Persistente" else "持续连接", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                            Text(if (isEnglish) "Auto-reconnect to Gateway" else if (isSpanish) "Autoconectar a la Pasarela" else "自动重新连接网关", fontSize = 12.sp, color = Color.Gray)
+                                        }
+                                        Switch(
+                                            checked = autoConnectGateway,
+                                            onCheckedChange = { viewModel.autoConnectGateway.value = it },
+                                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color.Black)
+                                        )
+                                    }
+                                }
+
                                 // Step 1
                                 ConnectivityStepCard(
                                     step = 1,
@@ -285,7 +311,7 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
                                             }
                                         } else {
                                             Text(
-                                                text = if (isEnglish) "Open Terminal on your OpenClaw gateway and run this command:" else if (isSpanish) "Abra la terminal en su pasarela OpenClaw y ejecute este comando:" else "在网关终端上运行：",
+                                                text = if (isEnglish) "Inside your gateway terminal, use pm2 to ensure the server automatically restarts if it crashes:" else if (isSpanish) "Abra la terminal en su pasarela y use pm2 para reiniciar si falla:" else "在网关终端上，请使用 pm2 以确保崩溃时自动重启：",
                                                 fontSize = 12.sp,
                                                 color = Color.Gray
                                             )
