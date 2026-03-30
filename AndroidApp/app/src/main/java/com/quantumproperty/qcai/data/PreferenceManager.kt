@@ -69,9 +69,21 @@ object PreferenceManager {
     var tailscaleGatewayToken: String
         get() = prefs.getString(KEY_TS_TOKEN, "") ?: ""
         set(value) = prefs.edit().putString(KEY_TS_TOKEN, value).apply()
+
     private const val KEY_AUTO_CONNECT = "auto_connect_gateway"
 
     var autoConnectGateway: Boolean
         get() = prefs.getBoolean(KEY_AUTO_CONNECT, false)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CONNECT, value).apply()
+
+    private const val KEY_PORTAL_HOST = "portal_host"
+    private const val KEY_PORTAL_PORT = "portal_port"
+
+    var portalHost: String
+        get() = prefs.getString(KEY_PORTAL_HOST, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_PORTAL_HOST, value).apply()
+
+    var portalPort: String
+        get() = prefs.getString(KEY_PORTAL_PORT, "18790") ?: "18790"
+        set(value) = prefs.edit().putString(KEY_PORTAL_PORT, value).apply()
 }

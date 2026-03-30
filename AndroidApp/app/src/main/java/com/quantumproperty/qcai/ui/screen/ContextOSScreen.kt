@@ -1,7 +1,8 @@
+@file:Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
+
 package com.quantumproperty.qcai.ui.screen
 
 import android.Manifest
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -23,22 +24,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.quantumproperty.qcai.data.DataDomain
 import com.quantumproperty.qcai.ui.viewmodel.ContextOSViewModel
-import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContextOSScreen(
     viewModel: ContextOSViewModel = viewModel(),
-    teacherViewModel: TeacherViewModel = viewModel(),
     onBack: () -> Unit
 ) {
 
@@ -119,6 +116,7 @@ fun ContextOSScreen(
                         icon = Icons.Default.Schedule,
                         color = Color(0xFFFF9800),
                         enabled = viewModel.temporalEnabled,
+                        description = "Upcoming calendar events, reminders, and daily schedule analysis.",
                         onToggle = { 
                             if (!viewModel.temporalEnabled) {
                                 calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
@@ -130,9 +128,10 @@ fun ContextOSScreen(
                     Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFEEEEEE))
                     DomainRow(
                         title = "Focus & Attention",
-                        icon = Icons.Default.Visibility,
+                        icon = Icons.Default.Adjust,
                         color = Color(0xFF9C27B0),
                         enabled = viewModel.attentionEnabled,
+                        description = "Real-time attention state (Deep Work, Commuting, etc.) derived from device behavior.",
                         onToggle = { viewModel.toggleDomain(DataDomain.ATTENTION) }
                     )
                     Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFEEEEEE))
@@ -141,6 +140,7 @@ fun ContextOSScreen(
                         icon = Icons.Default.Favorite,
                         color = Color(0xFFF44336),
                         enabled = viewModel.healthEnabled,
+                        description = "Vital signs (HRV, Heart Rate) and physical activity trends (steps, calories).",
                         onToggle = { viewModel.toggleDomain(DataDomain.BIOMETRICS) }
                     )
                     Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFEEEEEE))
@@ -149,6 +149,7 @@ fun ContextOSScreen(
                         icon = Icons.Default.DirectionsWalk,
                         color = Color(0xFF4CAF50),
                         enabled = viewModel.motionEnabled,
+                        description = "Physical activity tracking (walking, running) and environmental context.",
                         onToggle = { 
                             if (!viewModel.motionEnabled) {
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -163,10 +164,20 @@ fun ContextOSScreen(
                     )
                     Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFEEEEEE))
                     DomainRow(
+                        title = "Visual Entities",
+                        icon = Icons.Default.Visibility,
+                        color = Color(0xFF673AB7),
+                        enabled = viewModel.visionEnabled,
+                        description = "On-device image and text recognition to understand what you're seeing.",
+                        onToggle = { viewModel.toggleDomain(DataDomain.VISION) }
+                    )
+                    Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFEEEEEE))
+                    DomainRow(
                         title = "Location & Travel",
                         icon = Icons.Default.LocationOn,
                         color = Color(0xFF00BCD4),
                         enabled = viewModel.locationEnabled,
+                        description = "Semantic place analysis (Home, Work, Transit) without sending raw GPS.",
                         onToggle = { 
                             if (!viewModel.locationEnabled) {
                                 locationPermissionLauncher.launch(
@@ -177,33 +188,37 @@ fun ContextOSScreen(
                             }
                         }
                     )
-                }
-
-                // Persistent Connection Setup
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White)
-                ) {
-                    val autoConnect by teacherViewModel.autoConnectGateway.collectAsState()
                     
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Persistent Connection", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text("Auto-reconnect to Tailscale and Gateway", fontSize = 12.sp, color = Color.Gray)
+                    // Exact GPS Precision (v5.6 Enhancement)
+                    AnimatedVisibility(visible = viewModel.locationEnabled) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color.White
+                        ) {
+                            Column {
+                                Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFEEEEEE))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        Spacer(Modifier.width(40.dp)) // Align with domain text
+                                        Column {
+                                            Text("Exact GPS Precision", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            Text("Submit exact coordinates to AI", fontSize = 11.sp, color = Color.Gray)
+                                        }
+                                    }
+                                    Switch(
+                                        checked = viewModel.locationExactEnabled,
+                                        onCheckedChange = { viewModel.toggleLocationExact() },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF00BCD4))
+                                    )
+                                }
+                            }
                         }
-                        Switch(
-                            checked = autoConnect,
-                            onCheckedChange = { teacherViewModel.autoConnectGateway.value = it },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF4CAF50), checkedTrackColor = Color(0xFFC8E6C9))
-                        )
                     }
                 }
             }
@@ -272,8 +287,24 @@ fun DomainRow(
     icon: ImageVector,
     color: Color,
     enabled: Boolean,
+    description: String,
     onToggle: () -> Unit
 ) {
+    var showHelp by remember { mutableStateOf(false) }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(title, fontWeight = FontWeight.Bold) },
+            text = { Text(description) },
+            confirmButton = {
+                TextButton(onClick = { }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -290,7 +321,21 @@ fun DomainRow(
             Icon(icon, contentDescription = null, tint = color)
         }
         Spacer(Modifier.width(16.dp))
-        Text(title, modifier = Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.width(4.dp))
+            IconButton(
+                onClick = { },
+                modifier = Modifier.size(18.dp)
+            ) {
+                Icon(
+                    Icons.Default.HelpOutline, 
+                    contentDescription = "Help",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
         Switch(
             checked = enabled,
             onCheckedChange = { onToggle() },
@@ -308,29 +353,84 @@ fun ContextOSSetupGuideDialog(
     onDismiss: () -> Unit
 ) {
     var showOverwriteAlert by remember { mutableStateOf(false) }
+    var installForLinux by remember { mutableStateOf(false) }
+    var showLogicPyPopup by remember { mutableStateOf(false) }
+    var showDiscoveryGuide by remember { mutableStateOf(false) }
 
     if (showOverwriteAlert) {
         AlertDialog(
-            onDismissRequest = { showOverwriteAlert = false },
-            title = { Text("Overwrite Runtime Files?") },
-            text = { Text("This will replace SOUL.md, HEARTBEAT.md, and TOOLS.md in ~/.openclaw/workspace/ on your gateway. Continue?") },
+            onDismissRequest = { },
+            title = { Text("Overwrite Runtime Files?", fontSize = 15.sp) },
+            text = {
+                Text(
+                    if (installForLinux)
+                        "This will install unixTOOLS.md (as TOOLS.md), SOUL.md, and HEARTBEAT.md in ~/.openclaw/workspace/ on your gateway. Continue?"
+                    else
+                        "This will install TOOLS.md, SOUL.md, and HEARTBEAT.md in ~/.openclaw/workspace/ on your gateway. Continue?",
+                    fontSize = 13.sp
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showOverwriteAlert = false
-                        viewModel.installQCAIGateway()
+                        viewModel.installQCAIGateway(forLinux = installForLinux)
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
-                ) {
-                    Text("Install")
-                }
+                ) { Text("Install", fontSize = 13.sp) }
             },
             dismissButton = {
-                TextButton(onClick = { showOverwriteAlert = false }) {
-                    Text("Cancel")
+                TextButton(onClick = { }) {
+                    Text("Cancel", fontSize = 13.sp)
                 }
             }
         )
+    }
+
+    if (showLogicPyPopup) {
+        FileContentPopup(
+            title = "logic.py",
+            content = viewModel.logicPyContent ?: "Loading..."
+        ) { }
+    }
+
+    if (showDiscoveryGuide) {
+        Dialog(
+            onDismissRequest = { },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Discovery Mode Guide", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = { }) {
+                            Icon(Icons.Default.Close, null)
+                        }
+                    }
+                    val ctx = LocalContext.current
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = {
+                            android.webkit.WebView(ctx).apply {
+                                settings.javaScriptEnabled = true
+                                loadUrl("https://qcai-net.github.io/openclaw/qcai.html")
+                            }
+                        },
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchIntelligenceFiles()
     }
 
     Dialog(
@@ -338,9 +438,7 @@ fun ContextOSSetupGuideDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             shape = RoundedCornerShape(24.dp),
             color = Color(0xFFF9F9F9)
         ) {
@@ -350,205 +448,242 @@ fun ContextOSSetupGuideDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Context OS Intelligence Setup", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, null)
-                    }
+                    Text("Context OS Intelligence Setup", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
                 }
-                
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // Header Description
                     Text(
                         "Configure your Gateway with the reasoning identity and proactive skills needed for Context OS to function.",
-                        fontSize = 14.sp,
-                        color = Color.Gray
+                        fontSize = 13.sp, color = Color.Gray
                     )
 
-                    // Option A: One-Click Install
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(16.dp))
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AutoAwesome, null, tint = Color(0xFF007AFF))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Option A: One-Click Install", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        ) {
-                            Text("ℹ️ Installs SOUL.md + HEARTBEAT.md + TOOLS.md", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
-                            Text("Deploys 3 runtime files to ~/.openclaw/workspace/. Works across all OpenClaw-connected apps.", fontSize = 11.sp, color = Color.Gray)
-                        }
-
-                        Button(
-                            onClick = { if (viewModel.isGatewayLinked) showOverwriteAlert = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = viewModel.isGatewayLinked && !viewModel.isInstallingQCAI,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = if (viewModel.isGatewayLinked) Color(0xFF007AFF) else Color.Gray)
-                        ) {
-                            if (viewModel.isInstallingQCAI) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Installing...")
-                            } else {
-                                Text("Install Runtime Files (3 files)", fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        if (viewModel.installationSuccess) {
-                            Column {
-                                Text("✅ SOUL.md + HEARTBEAT.md + TOOLS.md installed!", fontSize = 12.sp, color = Color(0xFF2E7D32))
-                                Text("All runtime and skill files deployed to ~/.openclaw/workspace/", fontSize = 11.sp, color = Color.Gray)
-                            }
-                        }
-                    }
-
-                    // The Intelligence Layer Section
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("The Intelligence Layer (The Brain)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    // ── Intelligence Layer ──
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("The Intelligence Layer (The Brain)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(
-                            "The OpenClaw app serves as your personal Context Collector and Framework. It securely gathers temporal, location, and biometric signals and submits them to your Gateway for analysis.",
-                            fontSize = 14.sp,
-                            color = Color.Gray
+                            "The true 'Brain' of your Context OS resides in four core files on your Gateway. Modify them anytime — no app rebuild required.",
+                            fontSize = 13.sp, color = Color.Gray
                         )
-                        Text(
-                            "The true 'Brain' of your Context OS resides in three core configuration files on your Gateway. To customize how your AI plans your day or responds to your needs, you simply modify these files—no app rebuild required.",
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
-
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(12.dp))
                                 .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            InfoRow(Icons.Default.AutoAwesome, "SOUL.md", "Defines Identity, Style, and Skills.")
-                            InfoRow(Icons.Default.Bolt, "HEARTBEAT.md", "Global Execution Rules & Safety.")
-                            InfoRow(Icons.Default.Build, "TOOLS.md", "Proactive Scheduler & Planning Logic.")
+                            InfoRow(Icons.Default.AutoAwesome, "SOUL.md",      "Defines Identity, Style, and Skills.")
+                            InfoRow(Icons.Default.Bolt,        "HEARTBEAT.md", "Global Execution Rules & Safety.")
+                            InfoRow(Icons.Default.Build,       "TOOLS.md",     "Proactive Scheduler & Planning Logic.")
+                            InfoRow(Icons.Default.Settings,    "logic.py",     "Momentum skill decision engine.")
+                        }
+                    }
+
+                    // ── Option A: One-Click Install ──
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, null, tint = Color(0xFF007AFF))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Option A: One-Click Install", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Text("ℹ️ Recommendation: Automatic Update", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Automatically fetch the latest intelligence files and install them to your gateway's workspace (~/.openclaw/workspace/). Choose the platform that matches your gateway machine.",
+                                fontSize = 13.sp, color = Color.Gray
+                            )
+                        }
+
+                        // Linux/Mac button
+                        Button(
+                            onClick = { if (viewModel.isGatewayLinked) { installForLinux = true; } },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = viewModel.isGatewayLinked && !viewModel.isInstallingQCAI && !viewModel.isFetchingIntelligence,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viewModel.isGatewayLinked) Color(0xFF2E7D32) else Color.Gray
+                            )
+                        ) {
+                            if (viewModel.isInstallingQCAI || viewModel.isFetchingIntelligence) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Working...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(Icons.Default.Terminal, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Install Intelligence For Linux/Mac Gateway", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Windows button
+                        Button(
+                            onClick = { if (viewModel.isGatewayLinked) { installForLinux = false; } },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = viewModel.isGatewayLinked && !viewModel.isInstallingQCAI && !viewModel.isFetchingIntelligence,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viewModel.isGatewayLinked) Color(0xFF007AFF) else Color.Gray
+                            )
+                        ) {
+                            if (viewModel.isInstallingQCAI || viewModel.isFetchingIntelligence) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Working...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(Icons.Default.DesktopWindows, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Install Intelligence For Windows Gateway", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (viewModel.installationSuccess) {
+                            Column {
+                                Text("✅ Gateway Intelligence Updated!", fontSize = 13.sp, color = Color(0xFF2E7D32))
+                                Text("SOUL, HEARTBEAT, and TOOLS are now running in your workspace.", fontSize = 13.sp, color = Color.Gray)
+                            }
+                        }
+                        viewModel.installationError?.let {
+                            Text("❌ Error: $it", fontSize = 13.sp, color = Color.Red)
                         }
                     }
 
                     Divider(color = Color.LightGray.copy(alpha = 0.5f))
 
-                    Text("Option B: Manual Configuration", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    // ── Option B: Manual Configuration ──
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Option B: Manual Configuration", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(
+                            "Manually install these files in your gateway folder ~/.openclaw/workspace/. Tap a file name to view and copy its content.",
+                            fontSize = 13.sp, color = Color.Gray
+                        )
+                        GuideStepViewSimple("SOUL.md",               Icons.Default.AutoAwesome,   viewModel.soulContent ?: "Loading...")
+                        GuideStepViewSimple("HEARTBEAT.md",          Icons.Default.Bolt,          viewModel.heartbeatContent ?: "Loading...")
+                        GuideStepViewSimple("TOOLS.md (Windows)",    Icons.Default.DesktopWindows, viewModel.toolsContent ?: "Loading...")
+                        GuideStepViewSimple("TOOLS.md (Linux/macOS)", Icons.Default.Terminal,     viewModel.unixToolsContent ?: "Loading...")
+                    }
 
-                    val soulContent = """
-# SOUL.md - OpenClaw Identity v9.2
+                    Divider(color = Color.LightGray.copy(alpha = 0.5f))
 
-## 1. Persona: The Chief of Staff
-You are a high-agency partner protecting the user's "Momentum." You manage the gap between Intent and Reality with radical restraint.
+                    // ── logic.py Section ──
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF7B1FA2).copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Memory, null, tint = Color(0xFF7B1FA2))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Install the Momentum Skill Engine", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Text(
+                            "After deploying the Intelligence brain files (TOOLS.md, HEARTBEAT.md and SOUL.md), install the logic engine that powers the Momentum skill:",
+                            fontSize = 13.sp, color = Color.Gray
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF7B1FA2).copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Folder, null, tint = Color(0xFF7B1FA2), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "~/.openclaw/skills/momentum/logic.py",
+                                fontSize = 13.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF7B1FA2).copy(alpha = 0.1f))
+                                .clickable { }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Description, null, tint = Color(0xFF7B1FA2), modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text("View logic.py", fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                color = Color(0xFF7B1FA2), modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = Color(0xFF7B1FA2), modifier = Modifier.size(18.dp))
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Terminal, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Linux/macOS only — run after placing the file:", fontSize = 13.sp, color = Color.Gray)
+                            }
+                            Text(
+                                "chmod +x ~/.openclaw/skills/momentum/logic.py",
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Gray.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                                    .padding(10.dp)
+                            )
+                        }
+                    }
 
-## 2. Dynamic Tone & Fatigue Awareness
-- **Adaptive Voice:** Professional and objective. Use natural phrasing like "Tight afternoon" or "Clear run ahead."
-- **Cognitive Load Curve:** Do not rely on fixed times. Base complexity on `activityDensity` (meetings/tasks) and `stressTrends`.
-  - **High Load:** Shift to binary (Yes/No) choices and reductive phrasing.
-  - **Low Load:** Allow for multi-step strategic proposals (WOW moments).
-- **Weekend Mode:** Reduce proactive output by 40%. Shift focus from "Efficiency" to "Recovery & Light Planning."
+                    Divider(color = Color.LightGray.copy(alpha = 0.5f))
 
-## 3. Momentum Anchors (Earned Reinforcement)
-- **Sparsity Rule:** Reinforce momentum max once per 3 hours. Only trigger when a threshold is crossed (e.g., 3+ events cleared on time).
-- **No Fluff:** Tie reinforcement to specific outcomes. 
-  - *Example:* "3rd meeting on time. Your flow is holding steady."
-- **Autonomy Preference:** If a user repeatedly rejects "Move/Reschedule" actions, shift from "Action Proposals" to "Awareness Hints."
-  - *Shift:* "Move 2 PM?" → "2 PM is looking tight."
+                    // ── Discovery Mode Section ──
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFE65100).copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Wifi, null, tint = Color(0xFFE65100))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Set Up Discovery Mode", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Text(
+                            "Enable Discovery Mode in your OpenClaw gateway so that Context OS can automatically detect and activate new skills.",
+                            fontSize = 13.sp, color = Color.Gray
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFE65100).copy(alpha = 0.1f))
+                                .clickable { }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Language, null, tint = Color(0xFFE65100), modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text("View Discovery Mode Setup Guide", fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                color = Color(0xFFE65100), modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ChevronRight, null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                        }
+                    }
 
-## 4. Trust through Abstraction
-- **No-Creep Rule:** Never mirror raw sensor data (Stress 0.82).
-- **Failure Transparency:** If operating in degraded mode, use soft phrasing: "Keeping it simple right now—your schedule is covered."
-""".trimIndent()
-
-                    val heartbeatContent = """
-# HEARTBEAT.md - Execution & Silence v9.2
-
-## 1. Silence Strategy (The "Quietly Excellent" Rule)
-- **Silence Confidence:** If the system predicts a low-value output with high confidence, remain silent.
-- **Learning Integration:** Log "Successful Silence" events. Use them to increase the threshold for similar low-engagement contexts in the future.
-- **Rejection Lock:** 2 consecutive dismissals = 120m `SILENT_MODE`.
-- **Soft Re-entry:** Resume with exactly ONE high-confidence (C > 0.9) insight. No backlog dumping.
-
-## 2. Confidence-Aware Behavior
-- **High Confidence (C > 0.8):** Action-oriented ("Move the 2 PM?").
-- **Low Confidence (C < 0.7):** Observational/Inquisitive ("Heading out? Want the grocery list?").
-
-## 3. Contextual Learning & Safety Bounds
-- **Spatial Learning:** Differentiate between "Work" preferences and "Home" preferences.
-- **Safety Floor:** Never auto-disable more than 50% of tool categories. Re-test suppressed tools every 7 days.
-- **Autonomy Detection:** Track "Manual Control" preference. If user ignores 3+ AI-managed shifts, pivot to "Hint-Only" mode for that category.
-
-## 4. Hardware Awareness
-- **Thermal/Battery Throttle:** Suspend background learning during `thermalState == serious` or `lowPowerMode`.
-- **Graceful Degradation:** Default to "Time-Sensitive" only if data stream is interrupted.
-""".trimIndent()
-
-                    val toolsContent = """
-# TOOLS.md - Feature Logic & Priority v9.2
-
-## 1. Priority Arbitration & Passive Hint Ranking
-- **Primary Action:** ONE high-priority action button.
-- **Passive Hint Gating:** Append ONE situational hint only if it adds awareness without redundancy. 
-- **Hint Ranking:** 1. Battery (<15%) | 2. Time Disruption | 3. Environmental (Weather/Traffic).
-- **Suppression:** No hints during `DEEP_WORK` or `SILENT_MODE`.
-
-## 2. Transition Anticipation (Robust Logic)
-- **Predictive Layer:** Pre-brief 10-15m before a state change.
-- **Cancellation Rule:** Suppress/Cancel brief if:
-  - User is already in motion (`activity` matches transition).
-  - Meeting start time shifts.
-  - Confidence < 0.7.
-
-## 3. Tiered WOW Engine
-- **Mini-WOW (P > 0.75):** Lightweight 2-step optimization.
-- **Full WOW (P > 0.90):** Full afternoon restructuring proposal.
-- **Rule:** Always present as a proposal. Respect the user's "Autonomy Preference" in the phrasing.
-
-## 4. Long-Term Memory (Pattern Confidence)
-- **Promotion Criteria:** Only promote a routine (e.g., "Gym at 17:30") if consistency > 70% over 10+ occurrences.
-- **Decay:** Patterns not observed for 7 days are demoted to avoid "Stale Intelligence."
-""".trimIndent()
-
-                    GuideStepView(
-                        number = 1,
-                        title = "SOUL.md (Identity + Style + Skills)",
-                        description = "Path: ~/.openclaw/workspace/SOUL.md\nThe unified constitution — identity, visual standard, and execution permissions.",
-                        files = listOf("SOUL.md" to soulContent)
-                    )
-                    GuideStepView(
-                        number = 2,
-                        title = "HEARTBEAT.md (Execution Logic)",
-                        description = "Path: ~/.openclaw/workspace/HEARTBEAT.md\nThe orchestration engine — triggers, safeguards, and adaptive learning.",
-                        files = listOf("HEARTBEAT.md" to heartbeatContent)
-                    )
-                    GuideStepView(
-                        number = 3,
-                        title = "TOOLS.md (Proactive Skill)",
-                        description = "Path: ~/.openclaw/workspace/TOOLS.md\nAlso installed via One-Click. Tells the AI how to respond to context syncs.",
-                        files = listOf("TOOLS.md" to toolsContent)
-                    )
-                    GuideStepView(
-                        number = 4,
-                        title = "Restart Gateway",
-                        description = "Restart to apply changes:",
-                        code = "openclaw gateway restart"
-                    )
-                    
-                    Spacer(Modifier.height(32.dp))
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
@@ -556,92 +691,89 @@ You are a high-agency partner protecting the user's "Momentum." You manage the g
 }
 
 @Composable
-fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String) {
+fun FileContentPopup(title: String, content: String, onDismiss: () -> Unit) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.8f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF5F5F5))
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp)
+                ) {
+                    Text(content, fontSize = 12.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(content))
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Copy to Clipboard", fontSize = 13.sp) }
+            }
+        }
+    }
+}
+
+@Composable
+fun GuideStepViewSimple(
+    title: String,
+    icon: ImageVector,
+    content: String
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (showDialog) {
+        FileContentPopup(title = title, content = content) { }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .clickable { }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Icon(Icons.Default.ChevronRight, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+    }
+}
+
+@Composable
+fun InfoRow(icon: ImageVector, title: String, detail: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, modifier = Modifier.size(20.dp), tint = Color(0xFF007AFF))
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(detail, fontSize = 11.sp, color = Color.Gray)
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(detail, fontSize = 13.sp, color = Color.Gray)
         }
     }
 }
 
-@Composable
-fun GuideStepView(
-    number: Int,
-    title: String,
-    description: String,
-    code: String? = null,
-    files: List<Pair<String, String>>? = null
-) {
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.Blue.copy(alpha = 0.02f))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.Blue),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(number.toString(), color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        }
-        
-        Text(description, fontSize = 14.sp, color = Color.Gray)
-        
-        if (code != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    code,
-                    fontSize = 12.sp,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Gray.copy(alpha = 0.1f))
-                        .padding(8.dp)
-                )
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = { 
-                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(code))
-                }) {
-                    Icon(Icons.Default.ContentCopy, null, tint = Color.Blue)
-                }
-            }
-        }
-        
-        if (files != null) {
-            files.forEach { (filename, content) ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(filename, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(content))
-                        }) {
-                            Text("Copy Content", fontSize = 12.sp)
-                        }
-                    }
-                    Text(
-                        content,
-                        fontSize = 10.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        maxLines = 3,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.Gray.copy(alpha = 0.05f))
-                            .padding(8.dp)
-                    )
-                }
-            }
-        }
-    }
-}

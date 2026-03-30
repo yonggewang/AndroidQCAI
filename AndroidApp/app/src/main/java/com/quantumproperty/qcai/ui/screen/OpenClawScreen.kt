@@ -64,6 +64,7 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
     val isTunnelConnected by viewModel.isTunnelConnected.collectAsState()
     val gatewayCommand by viewModel.gatewayCommand.collectAsState()
     val tunnelIP by viewModel.tunnelIP.collectAsState()
+    val showPortalSetup by viewModel.showPortalSetup.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
     val gatewayAuthKey by viewModel.gatewayAuthKey.collectAsState()
     val isPairingRequired by viewModel.isPairingRequired.collectAsState()
@@ -197,20 +198,23 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             ManagementCard(
-                                title = if (isEnglish) "Web Console" else if (isSpanish) "Consola Web" else "Web 控制台",
+                                title = if (isEnglish) "Dashboard" else if (isSpanish) "Panel" else "仪表板",
                                 subtitle = if (isEnglish) "Monitor & Manage" else if (isSpanish) "Monitorear y Gestionar" else "监控与管理",
                                 icon = Icons.Default.Public,
                                 color = Color(0xFF34C759), // Green
                                 modifier = Modifier.weight(1f),
+                                isDisabled = !isConnected,
                                 onClick = { viewModel.openWebConsole() }
                             )
                             ManagementCard(
-                                title = if (isEnglish) "Context OS" else if (isSpanish) "Contexto OS" else "系统环境",
-                                subtitle = if (isEnglish) "AI Sensors" else if (isSpanish) "Sensores de IA" else "AI 传感器",
-                                icon = Icons.Default.Psychology,
-                                color = Color(0xFF007AFF), // Blue
+                                title = if (isEnglish) "Portal" else if (isSpanish) "Portal" else "门户",
+                                subtitle = if (isEnglish) "Node.js System" else if (isSpanish) "Sistema Node.js" else "Node.js 系统",
+                                icon = Icons.Default.Kitchen,
+                                color = Color(0xFFFF9500), // Orange
                                 modifier = Modifier.weight(1f),
-                                onClick = { viewModel.openContextOS() }
+                                isDisabled = !isConnected,
+                                onInfoClick = { viewModel.setShowPortalSetup(true) },
+                                onClick = { viewModel.openPortal(context) }
                             )
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -220,7 +224,17 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
                                 icon = Icons.Default.Chat,
                                 color = Color(0xFFAF52DE), // Purple
                                 modifier = Modifier.weight(1f),
+                                isDisabled = !isConnected,
                                 onClick = { viewModel.openGatewayChat() }
+                            )
+                            ManagementCard(
+                                title = if (isEnglish) "Context OS" else if (isSpanish) "Contexto OS" else "系统环境",
+                                subtitle = if (isEnglish) "AI Sensors" else if (isSpanish) "Sensores de IA" else "AI 传感器",
+                                icon = Icons.Default.Psychology,
+                                color = Color(0xFF007AFF), // Blue
+                                modifier = Modifier.weight(1f),
+                                isDisabled = !isConnected,
+                                onClick = { viewModel.openContextOS() }
                             )
                         }
                     }
@@ -547,20 +561,65 @@ fun OpenClawScreen(viewModel: TeacherViewModel) {
             onDismiss = { viewModel.toggleConfigPreview(false) }
         )
     }
+
+    // Portal Setup Dialog
+    if (showPortalSetup) {
+        PortalSetupDialog(
+            viewModel = viewModel,
+            onDismiss = { viewModel.setShowPortalSetup(false) }
+        )
+    }
 }
 
 @Composable
-fun ManagementCard(title: String, subtitle: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun ManagementCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    color: Color,
+    modifier: Modifier = Modifier,
+    isDisabled: Boolean = false,
+    onInfoClick: (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
     Surface(
+        modifier = modifier
+            .alpha(if (isDisabled) 0.6f else 1.0f)
+            .clickable(enabled = !isDisabled) { onClick() },
         color = Color.White,
         shape = RoundedCornerShape(16.dp),
-        shadowElevation = 2.dp,
-        modifier = modifier.height(110.dp).clickable { onClick() }
+        shadowElevation = 2.dp
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.Start) {
-            Box(modifier = Modifier.background(color, RoundedCornerShape(12.dp)).padding(10.dp)) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(if (isDisabled) Color.Gray else color, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                
+                if (onInfoClick != null) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Portal Info",
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onInfoClick() }
+                    )
+                }
             }
+
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                 Text(subtitle, fontSize = 10.sp, color = Color.Gray)
@@ -989,6 +1048,148 @@ fun SetupStepRow(
                             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Setup Code", code))
                         }
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PortalSetupDialog(viewModel: TeacherViewModel, onDismiss: () -> Unit) {
+    val portalHost by viewModel.portalHost.collectAsState()
+    val portalPort by viewModel.portalPort.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isEnglish = viewModel.appLanguage.collectAsState().value == com.quantumproperty.qcai.data.AppLanguage.ENGLISH
+    val isSpanish = viewModel.appLanguage.collectAsState().value == com.quantumproperty.qcai.data.AppLanguage.SPANISH
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // Header
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFFF9500), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Kitchen, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                    Column {
+                        Text(
+                            if (isEnglish) "Portal Setup" else if (isSpanish) "Configuración de Portal" else "门户设置",
+                            fontWeight = FontWeight.Bold, fontSize = 18.sp
+                        )
+                        Text(
+                            if (isEnglish) "Node.js System Configuration" else if (isSpanish) "Configuración del Sistema Node.js" else "Node.js 系统配置",
+                            fontSize = 12.sp, color = Color.Gray
+                        )
+                    }
+                }
+
+                Divider(color = Color(0xFFF5F5F5))
+
+                // Configuration Fields
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (isEnglish) "Custom Portal Host" else if (isSpanish) "Nombre de Host del Portal" else "自定义门户主机",
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray
+                        )
+                        OutlinedTextField(
+                            value = portalHost,
+                            onValueChange = { viewModel.updatePortalHost(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { 
+                                Text(
+                                    if (isEnglish) "e.g. 100.x.x.x (Empty for default)" else if (isSpanish) "ej. 100.x.x.x (Vacío por defecto)" else "例如 100.x.x.x (为空则使用默认值)",
+                                    fontSize = 13.sp
+                                ) 
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (isEnglish) "Custom Portal Port" else if (isSpanish) "Puerto del Portal" else "自定义门户端口",
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray
+                        )
+                        OutlinedTextField(
+                            value = portalPort,
+                            onValueChange = { viewModel.updatePortalPort(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { 
+                                Text(
+                                    if (isEnglish) "Default: 18790" else if (isSpanish) "Por defecto: 18790" else "默认: 18790",
+                                    fontSize = 13.sp
+                                ) 
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                        )
+                    }
+                }
+
+                // Reset Button
+                val resetText = if (isEnglish) "Reset to Smart Defaults" else if (isSpanish) "Restablecer Valores Predeterminados" else "恢复默认设置"
+                TextButton(
+                    onClick = {
+                        viewModel.updatePortalHost("")
+                        viewModel.updatePortalPort("")
+                    },
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp), tint = Color(0xFFFF9500))
+                    Spacer(Modifier.width(8.dp))
+                    Text(resetText, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF9500))
+                }
+
+                Text(
+                    if (isEnglish) "If left empty, the app will default to your currently linked Gateway IP and port 18790." 
+                    else if (isSpanish) "Si se deja vacío, la aplicación se conectará por defecto a la IP de su Pasarela vinculada y al puerto 18790."
+                    else "如果留空，应用程序将默认连接到当前绑定的网关 IP 和端口 18790。",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    lineHeight = 16.sp
+                )
+
+                // Documentation Button
+                Button(
+                    onClick = {
+                        viewModel.openPortalInfo(context)
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
+                ) {
+                    Icon(Icons.Default.Book, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (isEnglish) "View Documentation" else if (isSpanish) "Ver Documentación" else "查看文档",
+                        color = Color.White, fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(if (isEnglish) "Close" else if (isSpanish) "Cerrar" else "关闭", color = Color.Gray)
                 }
             }
         }

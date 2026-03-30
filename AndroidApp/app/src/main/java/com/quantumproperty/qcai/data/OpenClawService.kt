@@ -431,26 +431,29 @@ class OpenClawService private constructor() {
     /**
      * Sends a chat message to the gateway using the chat.send RPC.
      */
-    suspend fun sendChatMessage(sessionKey: String, message: String) {
-        val params = mapOf(
+    suspend fun sendChatMessage(sessionKey: String, message: String, images: List<String>? = null) {
+        val params = mutableMapOf<String, Any>(
             "sessionKey" to sessionKey,
             "idempotencyKey" to UUID.randomUUID().toString(),
             "message" to message
         )
+        if (images != null) {
+            params["images"] = images
+        }
         callRpc("chat.send", params)
     }
 
     /**
      * High-level helper to send a message to the default chat session.
      */
-    fun sendGatewayMessage(text: String) {
+    fun sendGatewayMessage(text: String, images: List<String>? = null) {
         if (!isConnected) return
         
         // Use our serviceScope for the RPC call
         handler.post {
             serviceScope.launch(Dispatchers.IO) {
                 try {
-                    sendChatMessage("agent:main:main", text)
+                    sendChatMessage("agent:main:main", text, images)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to send gateway message: ${e.message}")
                 }

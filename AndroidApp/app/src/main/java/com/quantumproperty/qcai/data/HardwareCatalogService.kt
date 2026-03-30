@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class HardwareCatalogService private constructor() {
 
-    private val catalogURL = "https://quantumpropertyllc.github.io/aihardware/catalog.json"
+    private val catalogURL = "https://qcai-net.github.io/aihardware/catalog.json"
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)

@@ -23,18 +23,52 @@ import com.quantumproperty.qcai.data.AppLanguage
 import com.quantumproperty.qcai.data.ChatMessage
 import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
 import kotlinx.coroutines.launch
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.os.Build
+import android.provider.MediaStore
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenClawChatScreen(viewModel: TeacherViewModel, onBack: () -> Unit) {
+    val textState by viewModel.gatewayInputText.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsState()
+    val listState = rememberLazyListState()
+    val context = LocalContext.current
     val messages by viewModel.gatewayMessages.collectAsState()
     val streamingText by viewModel.gatewayStreamingText.collectAsState()
-    val appLanguage by viewModel.appLanguage.collectAsState()
-    val isEnglish = appLanguage == AppLanguage.ENGLISH
-    val isSpanish = appLanguage == AppLanguage.SPANISH
+    val isEnglish = viewModel.appLanguage.collectAsState().value == AppLanguage.ENGLISH
+    val isSpanish = viewModel.appLanguage.collectAsState().value == AppLanguage.SPANISH
     
-    var textState by remember { mutableStateOf("") }
-    val listState = rememberLazyListState()
+    var selectedImageBase64 by remember { mutableStateOf<String?>(null) }
+    var selectedImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT < 28) {
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                } else {
+                    val source = ImageDecoder.createSource(context.contentResolver, it)
+                    ImageDecoder.decodeBitmap(source)
+                }
+                
+                selectedImageBitmap = bitmap
+                selectedImageBase64 = viewModel.processImageForOpenClaw(bitmap)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size, streamingText) {
@@ -76,58 +110,96 @@ fun OpenClawChatScreen(viewModel: TeacherViewModel, onBack: () -> Unit) {
         },
         bottomBar = {
             Surface(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding(),
                 color = Color(0xFF1C1C1E),
                 tonalElevation = 8.dp,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.ime)
-                        .padding(horizontal = 16.dp, vertical = 20.dp)
-                        .padding(bottom = 28.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextField(
-                        value = textState,
-                        onValueChange = { textState = it },
-                        placeholder = { 
-                            Text(
-                                if (isEnglish) "Type a message..." else if (isSpanish) "Escribe un mensaje..." else "输入消息...",
-                                color = Color.Gray 
-                            ) 
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(20.dp)),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.White.copy(alpha = 0.15f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.15f),
-                            disabledContainerColor = Color.Transparent,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        ),
-                        maxLines = 4
-                    )
-                    
-                    Spacer(Modifier.width(8.dp))
-                    
-                    FloatingActionButton(
-                        onClick = {
-                            if (textState.isNotBlank()) {
-                                viewModel.sendGatewayChat(textState)
-                                textState = ""
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    // Image Preview
+                    selectedImageBitmap?.let { bitmap ->
+                        Box(
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.2f))
+                        ) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Selected Image",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { 
+                                    selectedImageBitmap = null
+                                    selectedImageBase64 = null
+                                },
+                                modifier = Modifier.align(Alignment.TopEnd).size(24.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(14.dp))
                             }
-                        },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = Color(0xFF007AFF),
-                        contentColor = Color.White,
-                        shape = CircleShape
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                        }
                     }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Multimedia Buttons
+                        IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
+                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Add Photo", tint = Color.Gray)
+                        }
+                        
+                        IconButton(onClick = { viewModel.toggleRecording("OpenClawChat") }) {
+                            Icon(
+                                if (isRecording) Icons.Default.Stop else Icons.Default.Mic, 
+                                contentDescription = "Voice Input", 
+                                tint = if (isRecording) Color.Red else Color.Gray
+                            )
+                        }
+
+                        TextField(
+                            value = textState,
+                            onValueChange = { viewModel.setGatewayInputText(it) },
+                            placeholder = { 
+                                Text(
+                                    if (isEnglish) "Type a message..." else if (isSpanish) "Escribe un mensaje..." else "输入消息...",
+                                    color = Color.Gray 
+                                ) 
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
+                                .clip(RoundedCornerShape(20.dp)),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.White.copy(alpha = 0.15f),
+                                unfocusedContainerColor = Color.White.copy(alpha = 0.15f),
+                                disabledContainerColor = Color.Transparent,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            maxLines = 4
+                        )
+                        
+                        FloatingActionButton(
+                            onClick = {
+                                if (textState.isNotBlank() || selectedImageBase64 != null) {
+                                    viewModel.sendGatewayChat(textState, selectedImageBase64?.let { listOf(it) })
+                                    viewModel.setGatewayInputText("")
+                                    selectedImageBitmap = null
+                                    selectedImageBase64 = null
+                                }
+                            },
+                            modifier = Modifier.size(48.dp),
+                            containerColor = Color(0xFF007AFF),
+                            contentColor = Color.White,
+                            shape = CircleShape
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         },

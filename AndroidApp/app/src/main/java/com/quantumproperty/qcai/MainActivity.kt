@@ -19,6 +19,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Initialize Preference Manager BEFORE scheduling background sync or loading UI
+        com.quantumproperty.qcai.data.PreferenceManager.init(this)
+        
         // Schedule Context OS Background Sync
         com.quantumproperty.qcai.service.BackgroundSyncWorker.schedule(this)
         
@@ -45,19 +48,23 @@ class MainActivity : ComponentActivity() {
         }
 
         // Force Register FCM Token on Launch (Fix for Server Wipe)
-        com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (!task.isSuccessful) {
-                println("Fetching FCM registration token failed: ${task.exception}")
-                return@addOnCompleteListener
-            }
+        try {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    println("Fetching FCM registration token failed: ${task.exception}")
+                    return@addOnCompleteListener
+                }
 
-            // Get new FCM registration token
-            val token = task.result
-            println("Force registering FCM token (Android): $token")
-            
-            CoroutineScope(Dispatchers.IO).launch {
-                 com.quantumproperty.qcai.data.CityOSService.instance.registerDeviceToken(token, "android")
+                // Get new FCM registration token
+                val token = task.result
+                println("Force registering FCM token (Android): $token")
+                
+                CoroutineScope(Dispatchers.IO).launch {
+                     com.quantumproperty.qcai.data.CityOSService.instance.registerDeviceToken(token, "android")
+                }
             }
+        } catch (e: Exception) {
+            println("Firebase Messaging not available: ${e.message}")
         }
 
         setContent {

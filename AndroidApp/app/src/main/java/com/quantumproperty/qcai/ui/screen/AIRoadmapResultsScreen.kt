@@ -345,7 +345,7 @@ fun AIRoadmapResultsScreen(
                         // DIY Guide Button
                         val diyTemplateId = hardware.diyTemplate
                         Button(
-                            onClick = { BrowserUtils.openURL(context, "https://quantumpropertyllc.github.io/aihardware/diy.html?template=$diyTemplateId") },
+                            onClick = { BrowserUtils.openURL(context, "https://qcai-net.github.io/aihardware/diy.html?template=$diyTemplateId") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)), // Blue for info/guide
                             modifier = Modifier.fillMaxWidth()
                         ) {

@@ -176,9 +176,9 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
             onDismissRequest = { viewModel.closeNewsLocalLife() },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            NewsLocalLifeView(viewModel) {
-                viewModel.closeNewsLocalLife()
-            }
+        NewsLocalLifeView(viewModel = viewModel, onBack = {
+            viewModel.closeNewsLocalLife()
+        })
         }
     }
 
@@ -231,7 +231,8 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
         }
     }
 
-    errorMessage?.let { msg ->
+    if (errorMessage != null) {
+        val msg = errorMessage!!
         AlertDialog(
             onDismissRequest = { viewModel.dismissError() },
             title = { 
@@ -435,9 +436,9 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
                     1 -> CLTAIHubScreen(viewModel)
                     2 -> CLTVibeView(viewModel)
                     3 -> AIToolkitScreen(viewModel)
-                    4 -> NewsLocalLifeView(viewModel) {
+                    4 -> NewsLocalLifeView(viewModel = viewModel, onBack = {
                          // Tab index 4 now shows the actual NewsLocalLifeView content
-                    }
+                    })
                 }
             }
 

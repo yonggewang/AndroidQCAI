@@ -135,6 +135,20 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     val openClawError = _openClawError.asStateFlow()
     
     val autoConnectGateway = MutableStateFlow(false)
+    
+    val portalHost = MutableStateFlow(PreferenceManager.portalHost)
+    val portalPort = MutableStateFlow(PreferenceManager.portalPort)
+    
+    fun updatePortalHost(host: String) {
+        portalHost.value = host
+        PreferenceManager.portalHost = host
+    }
+
+    fun updatePortalPort(port: String) {
+        portalPort.value = port
+        PreferenceManager.portalPort = port
+    }
+
     private var reconnectAttempt = 0
 
     private val _isPairingRequired = MutableStateFlow(false)
@@ -165,7 +179,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _isTunnelConnected = MutableStateFlow(false)
     val isTunnelConnected = _isTunnelConnected.asStateFlow()
     
-    private val _gatewayCommand = MutableStateFlow("pm2 start openclaw --name gateway -- gateway --tailscale serve")
+    private val _gatewayCommand = MutableStateFlow("openclaw gateway --tailscale serve")
     val gatewayCommand = _gatewayCommand.asStateFlow()
     
     private val _tunnelIP = MutableStateFlow("100.x.x.x")
@@ -230,9 +244,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun openAIRoadmap(context: android.content.Context) {
         val url = when (_appLanguage.value) {
-            AppLanguage.CHINESE -> "https://quantumpropertyllc.github.io/aihardware/aistrategy_CN.html"
-            AppLanguage.SPANISH -> "https://quantumpropertyllc.github.io/aihardware/aistrategy_ES.html"
-            else -> "https://quantumpropertyllc.github.io/aihardware/aistrategy.html"
+            AppLanguage.CHINESE -> "https://qcai-net.github.io/aihardware/aistrategy_CN.html"
+            AppLanguage.SPANISH -> "https://qcai-net.github.io/aihardware/aistrategy_ES.html"
+            else -> "https://qcai-net.github.io/aihardware/aistrategy.html"
         }
         com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
     }
@@ -240,6 +254,13 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     fun closeAIRoadmap() {
         _showAIRoadmapView.value = false
         _aiRoadmapResponse.value = null // Clear state to allow retaking survey next time
+    }
+
+    private val _showPortalSetup = MutableStateFlow(false)
+    val showPortalSetup = _showPortalSetup.asStateFlow()
+
+    fun setShowPortalSetup(show: Boolean) {
+        _showPortalSetup.value = show
     }
 
     private val _showContextOSView = MutableStateFlow(false)
@@ -252,6 +273,32 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     fun closeContextOS() {
         _showContextOSView.value = false
     }
+
+    fun openPortal(context: android.content.Context) {
+        val customHost = portalHost.value
+        val customPort = portalPort.value
+        
+        val host = if (customHost.isNotEmpty()) customHost else gatewayHostname.value
+        val port = if (customPort.isNotEmpty()) customPort else "18790"
+        
+        if (host.isNotEmpty()) {
+            com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, "http://$host:$port")
+        }
+    }
+
+    fun openPortalInfo(context: android.content.Context) {
+        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, "http://qcai-net.github.io/clawportal.html")
+    }
+
+    private val _gatewayInputText = MutableStateFlow("")
+    val gatewayInputText = _gatewayInputText.asStateFlow()
+    
+    fun setGatewayInputText(text: String) {
+        _gatewayInputText.value = text
+    }
+
+    private val _recordingTarget = MutableStateFlow<String?>(null)
+    val recordingTarget = _recordingTarget.asStateFlow()
 
     fun submitAISurvey(response: com.quantumproperty.qcai.data.SurveyResponse) {
         _aiRoadmapResponse.value = response
@@ -289,9 +336,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun openProfessionalProfile(context: android.content.Context, id: String? = null) {
         val url = if (id != null) {
-            "https://quantumpropertyllc.github.io/aihardware/pro.html?id=$id"
+            "https://qcai-net.github.io/aihardware/pro.html?id=$id"
         } else {
-            "https://quantumpropertyllc.github.io/aihardware/pro.html"
+            "https://qcai-net.github.io/aihardware/pro.html"
         }
         com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
     }
@@ -516,7 +563,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         get() = speechManager?.transcript ?: MutableStateFlow("").asStateFlow()
 
     init {
-        PreferenceManager.init(application)
+        // PreferenceManager.init(application) // Now initialized in MainActivity for safety
         
         // Load Tailscale settings (Must be AFTER PreferenceManager.init)
         gatewayAuthKey.value = PreferenceManager.tailscaleAuthKey
@@ -671,8 +718,10 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         viewModelScope.launch {
             transcript.collect { text ->
-                if (text.isNotEmpty() && isRecording.value == false) {
-                     // Check if we just finished recording? 
+                if (text.isNotEmpty()) {
+                    if (_recordingTarget.value == "OpenClawChat") {
+                        _gatewayInputText.value = text
+                    }
                 }
             }
         }
@@ -1112,16 +1161,28 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _showAIRealEstateTools.value = true
     }
 
-    fun toggleRecording() {
+    fun toggleRecording(target: String? = null) {
         ttsManager?.stop()
         if (isRecording.value) {
             stopRecordingAndSend()
         } else {
              // Check keys BEFORE starting recording
              if (!checkKeys()) return
- 
-             _displayMode.value = DisplayMode.CHAT
-             speechManager?.startRecording { error ->
+             
+             _recordingTarget.value = target
+
+             if (target != "OpenClawChat") {
+                _displayMode.value = DisplayMode.CHAT
+             }
+             
+             // Language selection based on current app language
+             val languageTag = when (_appLanguage.value) {
+                 AppLanguage.CHINESE -> "zh-CN"
+                 AppLanguage.SPANISH -> "es-ES"
+                 else -> "en-US"
+             }
+
+             speechManager?.startRecording(languageTag) { error ->
                  handleError(error)
              }
         }
@@ -1130,10 +1191,16 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     fun stopRecordingAndSend() {
         if (isRecording.value) {
             speechManager?.stopRecording()
-            // Send what we have
-            val text = transcript.value
-            if (text.isNotEmpty()) {
-                sendMessage(text)
+            
+            val target = _recordingTarget.value
+            _recordingTarget.value = null
+            
+            // Send what we have if it's NOT a UI-only target
+            if (target != "OpenClawChat") {
+                val text = transcript.value
+                if (text.isNotEmpty()) {
+                    sendMessage(text)
+                }
             }
         }
     }
@@ -1779,15 +1846,50 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _showGatewayChat.value = false
     }
 
-    fun sendGatewayChat(text: String) {
+    fun sendGatewayChat(text: String, images: List<String>? = null) {
         if (text.isBlank()) return
+        if (isRecording.value) {
+            stopRecordingAndSend()
+        }
         
         // Add User Message
         val userMsg = ChatMessage(text = text, isUser = true)
         _gatewayMessages.value = _gatewayMessages.value + userMsg
         
         // Send via Service
-        openClawService.sendGatewayMessage(text)
+        openClawService.sendGatewayMessage(text, images)
+    }
+
+    /**
+     * Resizes and encodes a Bitmap to Base64 JPEG for OpenClaw Gateway.
+     */
+    fun processImageForOpenClaw(bitmap: android.graphics.Bitmap): String? {
+        return try {
+            val maxDim = 1600
+            var width = bitmap.width
+            var height = bitmap.height
+            
+            if (width > maxDim || height > maxDim) {
+                val ratio = width.toFloat() / height.toFloat()
+                if (width > height) {
+                    width = maxDim
+                    height = (maxDim / ratio).toInt()
+                } else {
+                    height = maxDim
+                    width = (maxDim * ratio).toInt()
+                }
+            }
+            
+            val resized = android.graphics.Bitmap.createScaledBitmap(bitmap, width, height, true)
+            val outputStream = java.io.ByteArrayOutputStream()
+            resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+            val bytes = outputStream.toByteArray()
+            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            "data:image/jpeg;base64,$base64"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     fun clearGatewayChat() {

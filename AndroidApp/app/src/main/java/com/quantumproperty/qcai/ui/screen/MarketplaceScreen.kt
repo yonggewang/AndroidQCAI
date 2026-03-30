@@ -104,7 +104,8 @@ fun MarketplaceScreen(
     }
     
     // Error Snackbar
-    errorMessage?.let { message ->
+    if (errorMessage != null) {
+        val message = errorMessage!!
         Snackbar(
             modifier = Modifier.padding(16.dp),
             action = {

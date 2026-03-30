@@ -328,7 +328,7 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                                     icon = Icons.Default.Memory,
                                     iconColor = Color(0xFFAF52DE),
                                     buttonTitle = if (isEnglish) "Shop" else "选购",
-                                    action = { BrowserUtils.openURL(context, "https://quantumpropertyllc.github.io/aihardware/") }
+                                    action = { BrowserUtils.openURL(context, "https://qcai-net.github.io/aihardware/") }
                                 )
                                 Divider(modifier = Modifier.padding(start = 60.dp))
                                 ResourceRow(
@@ -338,7 +338,7 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                                     iconColor = Color(0xFF34C759),
                                     buttonTitle = if (isEnglish) "Guide" else "指南",
                                     buttonColor = Color(0xFF34C759),
-                                    action = { BrowserUtils.openURL(context, "https://quantumpropertyllc.github.io/aihardware/diy.html") }
+                                    action = { BrowserUtils.openURL(context, "https://qcai-net.github.io/aihardware/diy.html") }
                                 )
                             }
                         }

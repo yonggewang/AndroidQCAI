@@ -18,7 +18,7 @@ class SpeechManager(private val context: Context) {
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording
 
-    fun startRecording(onError: (String) -> Unit) {
+    fun startRecording(languageTag: String = "zh-CN", onError: (String) -> Unit) {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             onError("Voice recognition not available on this device")
             return
@@ -26,6 +26,7 @@ class SpeechManager(private val context: Context) {
 
         // Clean up previous instance
         speechRecognizer?.destroy()
+        _transcript.value = ""
         
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -55,6 +56,7 @@ class SpeechManager(private val context: Context) {
                  if (!matches.isNullOrEmpty()) {
                      _transcript.value = matches[0]
                  }
+                 _isRecording.value = false
             }
             override fun onPartialResults(partialResults: Bundle?) {
                  val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -67,9 +69,9 @@ class SpeechManager(private val context: Context) {
         
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
-            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "zh-CN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageTag)
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, languageTag)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
         speechRecognizer?.startListening(intent)

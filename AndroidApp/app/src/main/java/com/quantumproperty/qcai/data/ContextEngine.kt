@@ -46,6 +46,10 @@ class ContextEngine private constructor(private val appContext: Context) {
     var locationEnabled: Boolean
         get() = prefs.getBoolean("context_location_enabled", false)
         set(value) = prefs.edit().putBoolean("context_location_enabled", value).apply()
+        
+    var locationExactEnabled: Boolean
+        get() = prefs.getBoolean("context_location_exact_enabled", false)
+        set(value) = prefs.edit().putBoolean("context_location_exact_enabled", value).apply()
 
     init {
         // Migration logic for specialized v5.5 fields if needed in future
@@ -95,8 +99,8 @@ class ContextEngine private constructor(private val appContext: Context) {
                 ),
                 stressScore = stress,
                 location = loc?.copy(
-                    latitude = null, // v5.5 Privacy Guard: Nullify for sync
-                    longitude = null,
+                    latitude = if (locationExactEnabled) loc.latitude else null,
+                    longitude = if (locationExactEnabled) loc.longitude else null,
                     classification = classification
                 ),
                 device = deviceStatus
@@ -216,9 +220,6 @@ class ContextEngine private constructor(private val appContext: Context) {
 
     private fun fetchUpcomingReminders(): List<ReminderTask> = emptyList()
 
-    private fun classifyLocation(lat: Double, lon: Double, speed: Double): String {
-        return if (speed > 2.0) "Transit" else "General"
-    }
 
     private fun fetchDeviceStatus(): DeviceStatus {
         val batteryStatus = appContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
