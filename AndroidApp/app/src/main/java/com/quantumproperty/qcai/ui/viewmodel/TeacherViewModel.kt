@@ -275,15 +275,39 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun openPortal(context: android.content.Context) {
-        val customHost = portalHost.value
-        val customPort = portalPort.value
-        
-        val host = if (customHost.isNotEmpty()) customHost else gatewayHostname.value
-        val port = if (customPort.isNotEmpty()) customPort else "18790"
-        
-        if (host.isNotEmpty()) {
-            com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, "http://$host:$port")
+        // On Android, Tailscale runs as a system VPN service, so Chrome Custom Tabs
+        // can reach Tailscale hostnames directly (unlike iOS where we need a local proxy).
+        // We mirror openWebConsole()'s approach: correct scheme + auth token.
+        val customHost = portalHost.value.trim()
+        val customPort = portalPort.value.trim()
+
+        // Determine target host (custom override or gateway hostname)
+        var host = if (customHost.isNotEmpty()) customHost else gatewayHostname.value.trim()
+
+        // Strip any accidentally included scheme
+        if (host.startsWith("https://", ignoreCase = true)) host = host.removePrefix("https://")
+        else if (host.startsWith("http://", ignoreCase = true)) host = host.removePrefix("http://")
+
+        if (host.isEmpty()) {
+            android.util.Log.w("TeacherViewModel", "openPortal: No host configured, skipping.")
+            return
         }
+
+        // Determine port — default 18790 for the portal (Node.js system)
+        val port = customPort.toIntOrNull() ?: 18790
+
+        // Use https ONLY for port 443 (standard TLS), http for others like 18790
+        val isTailscale = host.contains(".ts.net") || host.startsWith("100.")
+        val scheme = if (port == 443) "https" else "http"
+        val portPart = if (port == 443 || port == 80) "" else ":$port"
+
+        // Include the auth token so the portal can authenticate the session
+        val token = gatewayToken.value.trim()
+        val tokenPart = if (token.isNotEmpty()) "?token=$token" else ""
+
+        val url = "$scheme://$host$portPart/$tokenPart"
+        android.util.Log.i("TeacherViewModel", "🚀 Portal: Opening $url (isTailscale=$isTailscale)")
+        BrowserUtils.openURL(context, url)
     }
 
     fun openPortalInfo(context: android.content.Context) {
@@ -2064,7 +2088,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         val host = gatewayHostname.value.trim()
         val port = gatewayPort.value.toIntOrNull() ?: 443
         val token = gatewayToken.value.trim()
-        val isSecure = port == 443 || host.contains(".ts.net")
+        val isSecure = port == 443
         val scheme = if (isSecure) "https" else "http"
         val portPart = if (port == 443 || port == 80) "" else ":$port"
         val url = "$scheme://$host$portPart/?token=$token"
