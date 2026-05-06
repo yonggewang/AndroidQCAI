@@ -37,7 +37,7 @@ data class ChatConfig(
 class ChatConfigManager private constructor() {
     private val client = OkHttpClient()
     private val gson = Gson()
-    private val configURL = "https://yonggewang.github.io/qcai/chat_config.json"
+    private val configURL = "https://qcai-net.github.io/qcai/chat_config.json"
 
     private val _suggestions = MutableStateFlow<List<ChatSuggestion>>(emptyList())
     val suggestions: StateFlow<List<ChatSuggestion>> = _suggestions

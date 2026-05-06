@@ -229,6 +229,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private val _showRentalsView = MutableStateFlow(false)
     val showRentalsView = _showRentalsView.asStateFlow()
 
+    private val _showCollegeAdmissions = MutableStateFlow(false)
+    val showCollegeAdmissions = _showCollegeAdmissions.asStateFlow()
+
     private val _showTheSceneView = MutableStateFlow(false)
     val showTheSceneView = _showTheSceneView.asStateFlow()
     
@@ -1138,15 +1141,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
             when (topic) {
                 AITopic.DIY -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/"
+                    _currentWebUrl.value = "https://qcai-net.github.io/homediy/"
                 }
                 AITopic.FOOD -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/chineserestaurant.html"
+                    _currentWebUrl.value = "https://qcai-net.github.io/cfood/index_cn.html"
                 }
                 AITopic.AI_ANALYSIS -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = if (isChinese) "https://quantumpropertyllc.github.io/news/ainews_cn.html" else "https://quantumpropertyllc.github.io/news/ainews.html"
+                    _currentWebUrl.value = if (isChinese) "https://qcai-net.github.io/ainews/index_CN.html" else "https://qcai-net.github.io/ainews.html"
                 }
                 AITopic.WORLD_NEWS -> {
                     _displayMode.value = DisplayMode.WEB
@@ -1162,13 +1165,13 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 }
                 AITopic.REAL_ESTATE -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/realEstate.html"
+                    _currentWebUrl.value = "https://qcai-net.github.io/airealestate/"
                 }
                 AITopic.LIFE -> {
                     _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://quantumpropertyllc.github.io/homeowner/life.html"
+                    _currentWebUrl.value = "https://qcai-net.github.io/homeowner/life.html"
                 }
-                AITopic.CLT_VIBE, AITopic.STOCK, AITopic.NONE, AITopic.BUSINESS -> {
+                AITopic.CLT_VIBE, AITopic.STOCK, AITopic.COLLEGE, AITopic.NONE, AITopic.BUSINESS -> {
                     _displayMode.value = DisplayMode.CHAT
                 }
             }
@@ -1653,6 +1656,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     
     fun closeRentalsView() {
         _showRentalsView.value = false
+    }
+
+    fun openCollegeAdmissions() {
+        _showCollegeAdmissions.value = true
+    }
+
+    fun closeCollegeAdmissions() {
+        _showCollegeAdmissions.value = false
     }
 
     fun showTheSceneView(vibe: String) {

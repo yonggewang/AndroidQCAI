@@ -423,9 +423,9 @@ fun AINewsCard(
             Button(
                 onClick = { 
                     val url = when(language) {
-                        AppLanguage.CHINESE -> "https://yonggewang.github.io/ainews/index_CN.html"
-                        AppLanguage.SPANISH -> "https://yonggewang.github.io/ainews/index_ES.html"
-                        else -> "https://yonggewang.github.io/ainews/index.html"
+                        AppLanguage.CHINESE -> "https://qcai-net.github.io/ainews/index_CN.html"
+                        AppLanguage.SPANISH -> "https://qcai-net.github.io/ainews/index_ES.html"
+                        else -> "https://qcai-net.github.io/ainews/index.html"
                     }
                     onReadMoreClick(url) 
                 },

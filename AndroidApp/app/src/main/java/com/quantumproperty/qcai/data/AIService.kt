@@ -131,6 +131,7 @@ class AIService {
                 """.trimIndent()
                 AITopic.STOCK -> "\nCurrent Mode: Stock Analyst."
                 AITopic.BUSINESS -> "\nCurrent Mode: AI & Business Expert. Focus on AI technology, hardware (RTX/Workstations), and networking in Charlotte."
+                AITopic.COLLEGE -> "\nCurrent Mode: College Admissions Advisor."
                 AITopic.NONE -> "\nCurrent Mode: General Assistant."
             }
         } else {
@@ -162,6 +163,7 @@ class AIService {
                 """.trimIndent()
                 AITopic.STOCK -> "\n当前模式：股票分析师。"
                 AITopic.BUSINESS -> "\n当前模式：AI 与商务专家。专注于 AI 技术、硬件（RTX/工作站）以及夏洛特的商务社交。"
+                AITopic.COLLEGE -> "\n当前模式：升学顾问。"
                 AITopic.NONE -> "\n当前模式：通用助手。"
             }
         }

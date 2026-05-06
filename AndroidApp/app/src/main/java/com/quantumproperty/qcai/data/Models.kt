@@ -22,6 +22,7 @@ enum class AITopic(val chineseName: String, val englishName: String, val id: Str
     CLT_VIBE("夏洛特 Vibe", "CLT Vibe", "cltVibe"),
     BUSINESS("商务交流", "Business", "business"),
     STOCK("AI 股市透视", "AI Stock Analysis", "stock"),
+    COLLEGE("升学助手", "College Prep", "college"),
     NONE("无", "None", "none")
 }
 

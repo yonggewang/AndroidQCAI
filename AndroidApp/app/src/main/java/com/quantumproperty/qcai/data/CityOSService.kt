@@ -15,7 +15,7 @@ class CityOSService {
     // PROD: https://cyberpandaapp.com/city
     
     private val baseUrl = "https://queencityai.net/city"
-    private val aiNewsUrl = "https://yonggewang.github.io/ainews/summary.json"
+    private val aiNewsUrl = "https://qcai-net.github.io/ainews/summary.json"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(45, TimeUnit.SECONDS)
@@ -43,9 +43,9 @@ class CityOSService {
 
     suspend fun fetchAINewsArticles(language: String = "en"): List<AINewsArticle> = withContext(Dispatchers.IO) {
         val url = when (language) {
-            "cn", "zh" -> "https://yonggewang.github.io/ainews/summary_CN.json"
-            "es" -> "https://yonggewang.github.io/ainews/summary_ES.json"
-            else -> "https://yonggewang.github.io/ainews/summary.json"
+            "cn", "zh" -> "https://qcai-net.github.io/ainews/summary_CN.json"
+            "es" -> "https://qcai-net.github.io/ainews/summary_ES.json"
+            else -> "https://qcai-net.github.io/ainews/summary.json"
         }
 
         val request = Request.Builder()

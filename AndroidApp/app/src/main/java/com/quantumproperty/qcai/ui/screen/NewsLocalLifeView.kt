@@ -30,7 +30,8 @@ fun NewsLocalLifeView(viewModel: TeacherViewModel, onBack: () -> Unit) {
         derivedStateOf {
             menuItems.filter { 
                 it.topic != com.quantumproperty.qcai.data.AITopic.STOCK && 
-                it.topic != com.quantumproperty.qcai.data.AITopic.CLT_VIBE 
+                it.topic != com.quantumproperty.qcai.data.AITopic.CLT_VIBE &&
+                it.topic != com.quantumproperty.qcai.data.AITopic.COLLEGE
             }
         }
     }

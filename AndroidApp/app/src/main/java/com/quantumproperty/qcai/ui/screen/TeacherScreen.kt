@@ -460,7 +460,7 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                             onClick = {
                                 showAIAndToolsMenu = false
                                 //viewModel.openTwilioLookup() // Need to implement this or just open web
-                                BrowserUtils.openURL(context, "https://quantumpropertyllc.github.io/tools/callerid.html") // Placeholder URL or feature
+                                BrowserUtils.openURL(context, "https://qcai-net.github.io/tools/callerid.html") // Placeholder URL or feature
                             },
                             leadingIcon = { 
                                 Icon(
@@ -666,6 +666,12 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                 when {
                     selectedTopic == AITopic.CLT_VIBE -> {
                         CLTVibeView(viewModel)
+                    }
+                    selectedTopic == AITopic.COLLEGE -> {
+                        CollegeAdmissionsScreen(
+                            appLanguage = appLanguage,
+                            onBack = { viewModel.setTopic(AITopic.CLT_VIBE) }
+                        )
                     }
                     selectedTopic == AITopic.STOCK -> {
                         StockScreen()
@@ -1100,6 +1106,7 @@ fun TopicButton(
             AITopic.MISC -> Icons.Default.Dashboard
             AITopic.CLT_VIBE -> Icons.Default.AutoAwesome
             AITopic.STOCK -> Icons.Default.ShowChart
+            AITopic.COLLEGE -> Icons.Default.School
             AITopic.NONE -> Icons.Default.Dashboard
             AITopic.BUSINESS -> Icons.Default.BusinessCenter
         }

@@ -11,7 +11,7 @@ class HotListManager {
 
     suspend fun fetchHotList(): List<HotToolItem> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url("https://quantumpropertyllc.github.io/hotlist.txt")
+            .url("https://qcai-net.github.io/hotlist.txt")
             .header("Cache-Control", "no-cache") // Cache busting
             .build()
 

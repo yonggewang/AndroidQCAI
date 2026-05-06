@@ -192,7 +192,7 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                                         Text(topArticle.summary, fontSize = 14.sp, color = Color.Gray, maxLines = 3, overflow = TextOverflow.Ellipsis)
                                         
                                         OutlinedButton(
-                                            onClick = { BrowserUtils.openURL(context, "https://yonggewang.github.io/ainews/ainews.html") },
+                                            onClick = { BrowserUtils.openURL(context, "https://qcai-net.github.io/ainews/ainews.html") },
                                             shape = RoundedCornerShape(20.dp),
                                             border = BorderStroke(1.dp, Color(0xFF007AFF)),
                                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
@@ -285,7 +285,7 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                                     icon = Icons.Default.Work,
                                     iconColor = Color(0xFFFF9500),
                                     buttonTitle = if (isEnglish) "View" else "查看",
-                                    action = { BrowserUtils.openURL(context, "https://yonggewang.github.io/ainews/aijobs.html") }
+                                    action = { BrowserUtils.openURL(context, "https://qcai-net.github.io/ainews/aijobs.html") }
                                 )
                                 Divider(modifier = Modifier.padding(start = 60.dp))
                                 ResourceRow(
@@ -294,7 +294,7 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                                     icon = Icons.Default.AutoStories,
                                     iconColor = Color(0xFF007AFF),
                                     buttonTitle = if (isEnglish) "Learn" else "学习",
-                                    action = { BrowserUtils.openURL(context, "https://yonggewang.github.io/llminfo.html") }
+                                    action = { BrowserUtils.openURL(context, "https://qcai-net.github.io/llm/llminfo.html") }
                                 )
                             }
                         }

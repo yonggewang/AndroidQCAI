@@ -74,6 +74,7 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
     val showProfileDialog by viewModel.showProfileDialog.collectAsState()
     val showContextOSView by viewModel.showContextOSView.collectAsState()
     val showGatewayChat by viewModel.showGatewayChat.collectAsState()
+    val showCollegeAdmissions by viewModel.showCollegeAdmissions.collectAsState()
 
     // --- Dialogs ---
 
@@ -151,6 +152,20 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
                 RentalsScreen(
                     userProfile = userProfile,
                     onBack = { viewModel.closeRentalsView() }
+                )
+            }
+        }
+    }
+
+    if (showCollegeAdmissions) {
+        Dialog(
+            onDismissRequest = { viewModel.closeCollegeAdmissions() },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                CollegeAdmissionsScreen(
+                    appLanguage = appLanguage,
+                    onBack = { viewModel.closeCollegeAdmissions() }
                 )
             }
         }
@@ -280,6 +295,8 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
             viewModel.closeContextOS()
         } else if (showGatewayChat) {
             viewModel.closeGatewayChat()
+        } else if (showCollegeAdmissions) {
+            viewModel.closeCollegeAdmissions()
         } else if (selectedTab == 3 && viewModel.selectedTopic.value == com.quantumproperty.qcai.data.AITopic.STOCK) {
              viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.NONE)
         } else if (selectedTab != 1) { // Changed from 0 to 1 because CLT AI is now Tab 1

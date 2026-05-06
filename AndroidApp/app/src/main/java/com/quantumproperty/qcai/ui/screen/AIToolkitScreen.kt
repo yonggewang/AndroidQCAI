@@ -72,6 +72,18 @@ fun AIToolkitScreen(viewModel: TeacherViewModel) {
                 color = Color(0xFFFF3B30)
             ) { 
                  BrowserUtils.openURL(context, "https://www.google.com/search?q=reverse+phone+lookup")
+            },
+            ToolkitItem(
+                name = when {
+                    isSpanish -> "Preparación Universitaria"
+                    isEnglish -> "College Prep"
+                    else -> "升学助手"
+                }, 
+                shortName = "College", 
+                icon = Icons.Default.School, 
+                color = Color(0xFFFF9500)
+            ) { 
+                 viewModel.openCollegeAdmissions()
             }
         )
     }

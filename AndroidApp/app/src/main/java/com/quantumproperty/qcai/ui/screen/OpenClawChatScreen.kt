@@ -55,7 +55,8 @@ fun OpenClawChatScreen(viewModel: TeacherViewModel, onBack: () -> Unit) {
     ) { uri ->
         uri?.let {
             try {
-                val bitmap = if (Build.VERSION.SDK_INT < 28) {
+                @Suppress("DEPRECATION")
+                val bitmap = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                     MediaStore.Images.Media.getBitmap(context.contentResolver, it)
                 } else {
                     val source = ImageDecoder.createSource(context.contentResolver, it)

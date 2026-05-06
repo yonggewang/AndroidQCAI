@@ -23,12 +23,14 @@ class TopMenuManager {
         AITopic.DIY,
         AITopic.REAL_ESTATE,
         AITopic.LIFE,
+        AITopic.MISC,
+        AITopic.MISC,
         AITopic.MISC
     )
 
     suspend fun fetchTopMenu(): List<TopMenuItem> = withContext(Dispatchers.IO) {
         // Use simpler URL, rely on Cache-Control header
-        val url = "https://quantumpropertyllc.github.io/topmenu.txt"
+        val url = "https://qcai-net.github.io/topmenu.txt"
         
         val request = Request.Builder()
             .url(url)
@@ -58,7 +60,7 @@ class TopMenuManager {
         var topicIndex = 0
         for (line in lines) {
             try {
-                if (topicIndex >= 6) break // Only take first 6 from file
+                if (topicIndex >= 10) break // Only take first 10 from file
                 
                 val trimmedLine = line.trim()
                 if (trimmedLine.isEmpty()) continue
@@ -109,6 +111,16 @@ class TopMenuManager {
             chineseUrl = "",
             englishUrl = "",
             topic = AITopic.CLT_VIBE
+        ))
+        
+        // Add College Prep
+        items.add(TopMenuItem(
+            icon = "graduationcap.fill", // SF symbol equivalent or handled by icon logic
+            englishName = "College Prep",
+            chineseName = "升学助手",
+            chineseUrl = "",
+            englishUrl = "",
+            topic = AITopic.COLLEGE
         ))
         
         return items
