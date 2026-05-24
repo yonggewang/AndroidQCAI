@@ -28,6 +28,12 @@ data class Location(
     val y: Double
 )
 
+data class OwnerSearchResult(
+    val owner: String,
+    val address: String,
+    val pid: String
+)
+
 data class PropertyAttributes(
     var pid: String = "",
     var ownerName: String = "None Found",
@@ -159,16 +165,27 @@ class PropertyDataService {
         .build()
     private val spatialReference = 4326
 
+    private fun splitOwnerNames(ownerName: String): List<String> {
+        val clean = ownerName.trim()
+        if (clean.isEmpty() || clean.lowercase() == "none" || clean.lowercase() == "n/a" || clean.lowercase() == "none found") {
+            return emptyList()
+        }
+        val normalized = clean.replace("(?i)\\s+&\\s+".toRegex(), " and ")
+        val parts = normalized.split("(?i)\\s+and\\s+".toRegex())
+        return parts.map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
     suspend fun fetchPropertyData(address: String): PropertyDataResult = withContext(Dispatchers.IO) {
-        // Ensure address has city context for geocoding (Charlotte, NC default)
+        // Ensure address has city context for geocoding
         val addrLower = address.lowercase()
-        val normalizedAddress = if (
-            addrLower.contains("charlotte") || addrLower.contains(", nc") ||
-            addrLower.contains("matthews") || addrLower.contains("mint hill") ||
-            addrLower.contains("huntersville") || addrLower.contains("cornelius") ||
-            addrLower.contains("davidson") || addrLower.contains("pineville") ||
-            addrLower.contains("mooresville") || addrLower.contains("concord")
-        ) address else "$address, Charlotte, NC"
+        val hasCityOrNC = addrLower.contains(", nc") || addrLower.contains("nc ") || addrLower.contains("north carolina") ||
+           addrLower.contains("charlotte") || addrLower.contains("matthews") || addrLower.contains("mint hill") ||
+           addrLower.contains("huntersville") || addrLower.contains("cornelius") || addrLower.contains("davidson") ||
+           addrLower.contains("pineville") || addrLower.contains("mooresville") ||
+           addrLower.contains("concord") || addrLower.contains("kannapolis") || addrLower.contains("harrisburg") ||
+           addrLower.contains("monroe") || addrLower.contains("waxhaw") || addrLower.contains("indian trail")
+           
+        val normalizedAddress = if (hasCityOrNC) address else "$address, Charlotte, NC"
         
         // Strategy 1: Try US Census Geocoder first for Address Standardization
         var candidate = geocodeAddressCensus(normalizedAddress)
@@ -201,136 +218,279 @@ class PropertyDataService {
         val x = candidate.location.x
         val y = candidate.location.y
 
-        coroutineScope {
-            val spatialestDeferred = async { fetchSpatialestData(candidate.address, x, y) }
-            val schoolsDeferred = async { fetchSchoolZone(x, y) }
+        val resolvedCounty = identifyCounty(candidate.address)
+        
+        var output = ""
+        var hasOfficialGISData = false
+        var ownerNameForGrounding = ""
+        var parcelIdForGrounding = ""
+        var assessedValueForGrounding = ""
+        var taxAmountForGrounding = ""
 
-            val spatialestAttrs = spatialestDeferred.await()
-            val schools = schoolsDeferred.await()
-
-            var property = PropertyAttributes()
-            var hasOfficialGISData = false
-            var geocodeSourceString = geocodeSource
-
-            if (spatialestAttrs != null) {
-                property = spatialestAttrs
+        if (resolvedCounty == "Union") {
+            val unionParcel = fetchUnionParcelInfo(x, y)
+            if (unionParcel != null) {
                 hasOfficialGISData = true
-                geocodeSourceString = "Mecklenburg Property System (Spatialest)"
+                val parcelNo = unionParcel.optString("parcel_number", "")
+                val rawAddr = unionParcel.optString("Address", candidate.address)
+                
+                var assessedVal = 0.0
+                var landVal = 0.0
+                var bldgVal = 0.0
+                
+                if (parcelNo.isNotEmpty()) {
+                    val unionAssessed = fetchUnionAssessedValue(parcelNo)
+                    if (unionAssessed != null) {
+                        assessedVal = unionAssessed.optDouble("market_total", 0.0)
+                        landVal = unionAssessed.optDouble("market_land", 0.0)
+                        bldgVal = unionAssessed.optDouble("market_building", 0.0)
+                    }
+                }
+                
+                val taxEst = assessedVal * 0.01
+                val taxAmountString = String.format(java.util.Locale.US, "$%.2f", taxEst)
+                
+                val sb = StringBuilder()
+                sb.append("### 📋 Union County Property Registry\n")
+                sb.append("*   **Owner(s)**: Restricted in Union County public GIS (Search Grounding recommended)\n")
+                sb.append("*   **Street Address**: $rawAddr\n")
+                sb.append("*   **Parcel ID (PIN)**: $parcelNo\n")
+                if (assessedVal > 0) {
+                    val landStr = if (landVal > 0) String.format(java.util.Locale.US, "$%.2f", landVal) else "N/A"
+                    val bldgStr = if (bldgVal > 0) String.format(java.util.Locale.US, "$%.2f", bldgVal) else "N/A"
+                    sb.append("*   **Assessed Value**: ${String.format(java.util.Locale.US, "$%.2f", assessedVal)} (Land: $landStr, Building: $bldgStr)\n")
+                    sb.append("*   **Estimated Annual Tax**: $taxAmountString\n")
+                }
+                sb.append("\n*Note: Owner names are restricted in Union County's public GIS. Ask Gemini to search for the owner using Google search grounding.*\n")
+                
+                output = sb.toString()
+                ownerNameForGrounding = "Restricted in Union County public GIS"
+                parcelIdForGrounding = parcelNo
+                assessedValueForGrounding = if (assessedVal > 0) String.format(java.util.Locale.US, "$%.2f", assessedVal) else "N/A"
+                taxAmountForGrounding = taxAmountString
             } else {
-                // Fallback to ArcGIS parcels boundaries layer
-                val rawParcelAttrs = fetchParcelInfo(x, y)
-                if (rawParcelAttrs != null) {
-                    property = parsePropertyAttributes(rawParcelAttrs)
-                    hasOfficialGISData = property.pid.isNotEmpty() || property.ownerName != "None Found"
+                output = """
+                    ### 📍 Geocoding Details (No Parcel Registry Found)
+                    *   **Resolved Address**: ${candidate.address}
+                    *   **Coordinates**: $x, $y
+                    *   **Geocode Source**: $geocodeSource
+                    
+                    *Note: This property is outside the official Union County GIS parcel boundary map.*
+                """.trimIndent()
+            }
+        } else if (resolvedCounty == "Cabarrus") {
+            var objectIdVal: Int? = null
+            var pinVal = ""
+            val cabParcel = fetchCabarrusParcelInfo(x, y)
+            if (cabParcel != null) {
+                if (cabParcel.has("OBJECTID")) {
+                    objectIdVal = cabParcel.optInt("OBJECTID")
+                }
+                if (cabParcel.has("PIN14")) {
+                    pinVal = cabParcel.optString("PIN14")
                 }
             }
-
-            // Perform parallel background footprint searches using Owner Name
-            val civilCourtSummaryDeferred = async { JudyRecordsAPI.searchCivilRecords(property.ownerName) }
-            val academicAffiliationsDeferred = async { OpenAlexAPI.searchScholarProfiles(property.ownerName) }
-
-            val courtRecords = civilCourtSummaryDeferred.await()
-            val professionalData = academicAffiliationsDeferred.await()
-
-            val footprintString = if (courtRecords == "No public court records located" && professionalData == "No public footprint profiles located") {
-                "No public footprint profiles located"
+            
+            if (objectIdVal != null) {
+                hasOfficialGISData = true
+                var ownerName = "None Found"
+                var marketVal = 0.0
+                var landVal = 0.0
+                var bldgVal = 0.0
+                var salePrice = 0.0
+                var saleYear = 0
+                var nbhName = ""
+                var acreage = 0.0
+                
+                val cabTax = fetchCabarrusTaxInfo(objectIdVal)
+                if (cabTax != null) {
+                    val acct1 = cabTax.optString("AcctName1", "")
+                    val acct2 = cabTax.optString("AcctName2", "")
+                    if (acct1.isNotEmpty()) {
+                        ownerName = if (acct2.isEmpty()) acct1 else "$acct1 & $acct2"
+                    }
+                    marketVal = cabTax.optDouble("MarketValue", cabTax.optDouble("AssessedValue", 0.0))
+                    landVal = cabTax.optDouble("LandValue", 0.0)
+                    bldgVal = cabTax.optDouble("BuildingValue", 0.0)
+                    salePrice = cabTax.optDouble("SalePrice", 0.0)
+                    saleYear = cabTax.optInt("SaleYear", 0)
+                    nbhName = cabTax.optString("NBH_NAME", "")
+                    acreage = cabTax.optDouble("CALCULATED_ACREAGE", 0.0)
+                }
+                
+                val taxEst = marketVal * 0.01
+                val taxAmountString = String.format(java.util.Locale.US, "$%.2f", taxEst)
+                
+                val sb = StringBuilder()
+                sb.append("### 📋 Cabarrus County Property Registry\n")
+                sb.append("*   **Owner(s)**: $ownerName\n")
+                sb.append("*   **Street Address**: ${candidate.address}\n")
+                sb.append("*   **Parcel ID (PIN)**: $pinVal\n")
+                if (salePrice > 0) {
+                    val yearStr = if (saleYear > 0) " in $saleYear" else ""
+                    sb.append("*   **Last Transaction**: ${String.format(java.util.Locale.US, "$%.2f", salePrice)}$yearStr\n")
+                }
+                if (marketVal > 0) {
+                    val landStr = if (landVal > 0) String.format(java.util.Locale.US, "$%.2f", landVal) else "N/A"
+                    val bldgStr = if (bldgVal > 0) String.format(java.util.Locale.US, "$%.2f", bldgVal) else "N/A"
+                    sb.append("*   **Assessed Value**: ${String.format(java.util.Locale.US, "$%.2f", marketVal)} (Land: $landStr, Building: $bldgStr)\n")
+                    sb.append("*   **Estimated Annual Tax**: $taxAmountString\n")
+                }
+                if (nbhName.isNotEmpty()) {
+                    sb.append("*   **Neighborhood**: $nbhName\n")
+                }
+                if (acreage > 0) {
+                    sb.append("*   **Acreage**: ${String.format(java.util.Locale.US, "%.3f", acreage)} acres\n")
+                }
+                
+                output = sb.toString()
+                ownerNameForGrounding = ownerName
+                parcelIdForGrounding = pinVal
+                assessedValueForGrounding = if (marketVal > 0) String.format(java.util.Locale.US, "$%.2f", marketVal) else "N/A"
+                taxAmountForGrounding = taxAmountString
             } else {
-                "Associated Court/Civil Records:\n$courtRecords\n\nProfessional/Academic Associations:\n$professionalData"
+                output = """
+                    ### 📍 Geocoding Details (No Parcel Registry Found)
+                    *   **Resolved Address**: ${candidate.address}
+                    *   **Coordinates**: $x, $y
+                    *   **Geocode Source**: $geocodeSource
+                    
+                    *Note: This property is outside the official Cabarrus County GIS parcel boundary map.*
+                """.trimIndent()
             }
+        } else {
+            // Mecklenburg County (default)
+            coroutineScope {
+                val spatialestDeferred = async { fetchSpatialestData(candidate.address, x, y) }
+                val schoolsDeferred = async { fetchSchoolZone(x, y) }
 
-            val sb = StringBuilder()
+                val spatialestAttrs = spatialestDeferred.await()
+                val schools = schoolsDeferred.await()
 
-            if (hasOfficialGISData) {
-                sb.append("\n【OFFICIAL MECKLENBURG COUNTY GIS DATA】\n")
-                sb.append("Source: charlottenc.gov / Spatialest\n")
-                sb.append("Geocode Source: $geocodeSourceString\n")
-                sb.append("Coordinates: $x, $y\n")
+                var property = PropertyAttributes()
+                var geocodeSourceString = geocodeSource
 
-                sb.append("\n[Property Details]\n")
-                sb.append("- Owner: ${property.ownerName}\n")
-                sb.append("- Parcel ID (PIN): ${property.pid}\n")
-                if (property.assessedValue > 0) sb.append("- Assessed Value: ${property.assessedValue}\n")
-                if (property.landValue > 0) sb.append("- Land Value: ${property.landValue}\n")
-                if (property.buildingValue > 0) sb.append("- Building Value: ${property.buildingValue}\n")
-                if (property.yearBuilt > 0) sb.append("- Year Built: ${property.yearBuilt}\n")
-                if (property.squareFeet > 0) sb.append("- Total Area: ${property.squareFeet} sq ft\n")
-                if (property.bedrooms != null) sb.append("- Bedrooms: ${property.bedrooms}\n")
-                if (property.bathrooms != null) sb.append("- Bathrooms: ${property.bathrooms}\n")
-                if (property.zoning.isNotEmpty() && property.zoning != "N/A") sb.append("- Zoning/Land Use: ${property.zoning}\n")
-
-                if (schools != null) {
-                    sb.append("\n[School & Zone Info]\n")
-                    val sortedKeys = schools.keys.sorted()
-                    for (key in sortedKeys) {
-                        sb.append("- $key: ${schools[key]}\n")
+                if (spatialestAttrs != null) {
+                    property = spatialestAttrs
+                    hasOfficialGISData = true
+                    geocodeSourceString = "Mecklenburg Property System (Spatialest)"
+                } else {
+                    // Fallback to ArcGIS parcels boundaries layer
+                    val rawParcelAttrs = fetchParcelInfo(x, y)
+                    if (rawParcelAttrs != null) {
+                        property = parsePropertyAttributes(rawParcelAttrs)
+                        hasOfficialGISData = property.pid.isNotEmpty() || property.ownerName != "None Found"
                     }
                 }
 
-                sb.append("\nINSTRUCTIONS: Use the above OFFICIAL values to populate the required fields. Do not hallucinate different values if these are present.\n")
-            } else {
-                sb.append("\n【GEOCODING RESULT - NO OFFICIAL GIS DATA AVAILABLE】\n")
-                sb.append("Geocode Source: $geocodeSourceString\n")
-                sb.append("Resolved Address: ${candidate.address}\n")
-                sb.append("Coordinates: $x, $y\n")
-                sb.append("\nNote: This property is NOT within the Mecklenburg County GIS database. No official parcel records are available.\n")
+                // Format values for prompt/output
+                val salePriceString = if (property.lastSalePrice > 0) {
+                    String.format(java.util.Locale.US, "$%.2f", property.lastSalePrice)
+                } else {
+                    "No historical transaction price recorded in county registry"
+                }
+                val taxAmountString = String.format(java.util.Locale.US, "$%.2f", property.taxAmount)
+
+                val sb = StringBuilder()
+
+                if (hasOfficialGISData) {
+                    sb.append("### 📋 Mecklenburg County Property Registry\n")
+                    sb.append("*   **Owner(s)**: ${property.ownerName}\n")
+                    sb.append("*   **Street Address**: ${candidate.address}\n")
+                    sb.append("*   **Parcel ID (PIN)**: ${property.pid}\n")
+                    if (property.deedBook.isNotEmpty() && property.deedBook != "N/A") {
+                        sb.append("*   **Deed Reference**: Book ${property.deedBook} / Page ${property.deedPage}\n")
+                    }
+                    sb.append("*   **Last Transaction**: $salePriceString on ${property.lastSaleDate}\n")
+                    sb.append("*   **Calculated Annual Tax**: $taxAmountString\n")
+                    if (property.assessedValue > 0) {
+                        val landStr = if (property.landValue > 0) String.format(java.util.Locale.US, "$%.2f", property.landValue) else "N/A"
+                        val bldgStr = if (property.buildingValue > 0) String.format(java.util.Locale.US, "$%.2f", property.buildingValue) else "N/A"
+                        sb.append("*   **Assessed Value**: ${String.format(java.util.Locale.US, "$%.2f", property.assessedValue)} (Land: $landStr, Building: $bldgStr)\n")
+                    }
+                    if (property.yearBuilt > 0) sb.append("*   **Year Built**: ${property.yearBuilt}\n")
+                    if (property.squareFeet > 0) sb.append("*   **Finished Area**: ${property.squareFeet} sq ft\n")
+
+                    val layoutStr = if (property.bedrooms != null && property.bathrooms != null) {
+                        "${property.bedrooms} Beds / ${property.bathrooms} Baths"
+                    } else if (property.bedrooms != null) {
+                        "${property.bedrooms} Beds"
+                    } else if (property.bathrooms != null) {
+                        "${property.bathrooms} Baths"
+                    } else {
+                        "N/A"
+                    }
+                    sb.append("*   **Layout**: $layoutStr\n")
+                    if (property.zoning.isNotEmpty() && property.zoning != "N/A") sb.append("*   **Zoning/Land Use**: ${property.zoning}\n")
+
+                    if (schools != null) {
+                        sb.append("\n### 🏫 School Attendance Zones\n")
+                        val sortedKeys = schools.keys.sorted()
+                        for (key in sortedKeys) {
+                            sb.append("*   **$key**: ${schools[key]}\n")
+                        }
+                    }
+                } else {
+                    sb.append("### 📍 Geocoding Details (No Parcel Registry Found)\n")
+                    sb.append("*   **Resolved Address**: ${candidate.address}\n")
+                    sb.append("*   **Coordinates**: $x, $y\n")
+                    sb.append("*   **Geocode Source**: $geocodeSourceString\n")
+                    sb.append("\n*Note: This property is outside the official Mecklenburg County GIS parcel boundary map.*\n")
+                }
+                
+                output = sb.toString()
+                ownerNameForGrounding = property.ownerName
+                parcelIdForGrounding = property.pid
+                assessedValueForGrounding = if (property.assessedValue > 0) String.format(java.util.Locale.US, "$%.2f", property.assessedValue) else "N/A"
+                taxAmountForGrounding = taxAmountString
             }
-
-            // Format values for prompt
-            val salePriceString = if (property.lastSalePrice > 0) {
-                String.format(java.util.Locale.US, "$%.2f", property.lastSalePrice)
-            } else {
-                "No historical transaction price recorded in county registry"
-            }
-            val taxAmountString = String.format(java.util.Locale.US, "$%.2f", property.taxAmount)
-
-            val landValueString = if (property.landValue > 0) String.format(java.util.Locale.US, "$%.2f", property.landValue) else "N/A"
-            val buildingValueString = if (property.buildingValue > 0) String.format(java.util.Locale.US, "$%.2f", property.buildingValue) else "N/A"
-            val totalAssessedValueString = if (property.assessedValue > 0) String.format(java.util.Locale.US, "$%.2f", property.assessedValue) else "N/A"
-            val yearBuiltString = if (property.yearBuilt > 0) "${property.yearBuilt}" else "N/A"
-            val squareFootageString = if (property.squareFeet > 0) "${property.squareFeet} sq ft" else "N/A"
-            val layoutString = "${property.bedrooms ?: 0} Beds / ${property.bathrooms ?: 0.0} Baths"
-
-            val promptPayload = """
-                [SYSTEM INSTRUCTION]
-                You are an advanced real estate data compiler and layout engine equipped with Google Search Grounding. Your objective is to synthesize the provided local registry data with real-time web intelligence to create a complete property portfolio.
-
-                CRITICAL INSTRUCTION FOR SENSITIVE METRICS:
-                1. Rely EXCLUSIVELY on the provided "=== INTEGRATED LOCAL APP REGISTRIES ===" block for ownership names, deed transactions, tax assessments, and specialized record data. 
-                2. Use your live Google Search Grounding capacity to explore the physical address location. Research surrounding neighborhood safety indicators, public block-level crime statistics, regional market conditions, and school ratings.
-                3. Integrate these two streams seamlessly into your final output.
-
-                === INTEGRATED LOCAL APP REGISTRIES ===
-                Target Physical Address: ${candidate.address}
-                ArcGIS Owner Name: ${property.ownerName}
-                Parcel Legal ID (PID): ${property.pid}
-                Deed Reference: Book ${property.deedBook} / Page ${property.deedPage}
-                Last Sale Value: $salePriceString on ${property.lastSaleDate}
-                Calculated Annual Tax: $taxAmountString
-                Land Value: $landValueString
-                Building Value: $buildingValueString
-                Total Assessed Value: $totalAssessedValueString
-                Year Built: $yearBuiltString
-                Square Footage: $squareFootageString
-                Interior Layout: $layoutString
-                Zoning/Land Use: ${property.zoning}
-                App-Sourced Legal/Civil Notes: $footprintString
-
-                === GROUNDING INSTRUCTION ===
-                1. Execute a real-time web search focusing on the target physical address and its immediate neighborhood block. 
-                2. Gather localized safety insights, neighborhood crime history indices, and proximity risk factors.
-                3. Fetch surrounding property market updates and active school zone performance ratings.
-
-                === OUTPUT FORMAT REQUIREMENTS ===
-                Synthesize the injected registry metrics and your live search findings into a professional, structured markdown layout. Ensure the true owner name and exact tax histories are cleanly displayed alongside your discovered neighborhood safety metrics and general local property insights.
-            """.trimIndent()
-
-            PropertyDataResult(
-                formattedData = sb.toString(),
-                hasOfficialGISData = hasOfficialGISData,
-                coordinates = Pair(x, y),
-                promptPayload = promptPayload
-            )
         }
+
+        // Build instructions for Gemini owner search grounding
+        val ownerGroundingInstructions = if (resolvedCounty == "Union") {
+            "- **Identify Owner & Background**: Since public GIS owner names are restricted in Union County, first perform a live web search to identify the owner(s) of the property at \"${candidate.address}\" (look up GIS records, property sales, or tax portals). Once identified, perform professional and social networking searches (e.g. LinkedIn, Facebook) to retrieve their background, professional roles, or public profiles."
+        } else {
+            val ownerNames = splitOwnerNames(ownerNameForGrounding)
+            if (ownerNames.isEmpty()) {
+                "- **Potential Professional & Social Footprints**: Search for the property owner(s) \"$ownerNameForGrounding\" in Charlotte or North Carolina to find potential background or footprints."
+            } else {
+                val sbOwners = StringBuilder("- **Potential Professional & Social Footprints**: For each of the following owners individually, perform a live web search using queries like \"[Owner Name], NC\" or \"[Owner Name]\" on professional and social networking sites (especially LinkedIn and Facebook) to retrieve better, highly relevant profiles and public footprints. Describe any found professional roles, academic background, or associations for each owner:\n")
+                for (name in ownerNames) {
+                    sbOwners.append("     * Owner: \"$name\"\n")
+                }
+                sbOwners.toString()
+            }
+        }
+
+        // Build the prompt payload directing Gemini to focus on supplementary grounding search
+        val promptPayload = """
+            [SYSTEM INSTRUCTION]
+            You are an advanced real estate compiler equipped with Google Search Grounding.
+            
+            CRITICAL OUTPUT REQUIREMENTS:
+            1. The client application is ALREADY displaying the official property registry details (such as Parcel ID, owner names, values, deed books, tax, school attendance zones, etc.) directly to the user. DO NOT repeat or echo these raw registry details in your response, and DO NOT print headers like "Property Details" or list these duplicate metrics.
+            2. Focus your response exclusively on supplementary web-grounded analysis:
+               - **Neighborhood & Block-level Safety**: Search for block-level safety reviews, crime indexes, safety ratings, and hazard factors for "${candidate.address}" in $resolvedCounty County.
+               - **Local Property Market & Trends**: Search for recent neighborhood market updates, value appreciation trends, or regional housing insights.
+               - **Detailed School Performance**: Search for performance ratings, parent reviews, test score ranks, and academic insights for the schools near "${candidate.address}".
+               $ownerGroundingInstructions
+               Label the owner section clearly as "Potential Professional & Social Footprints (from live web lookup)".
+            3. Never include citations (e.g. `[cite: ...]`) pointing to the local registry context block. If you mention the address, owner names, or schools, do so as normal text without any citation brackets or sources.
+            
+            === CONTEXT: INTEGRATED LOCAL APP REGISTRIES ===
+            Target Physical Address: ${candidate.address}
+            Owner Name(s): $ownerNameForGrounding
+            Parcel Legal ID (PIN): $parcelIdForGrounding
+            Assessed Value: $assessedValueForGrounding
+            Calculated Tax: $taxAmountForGrounding
+        """.trimIndent()
+
+        PropertyDataResult(
+            formattedData = output,
+            hasOfficialGISData = hasOfficialGISData,
+            coordinates = Pair(x, y),
+            promptPayload = promptPayload
+        )
     }
 
     suspend fun fetchPropertyDataString(address: String): String {
@@ -835,5 +995,383 @@ class PropertyDataService {
             }
         }
         return prop
+    }
+
+    private fun identifyCounty(address: String): String {
+        val addr = address.lowercase()
+        if (addr.contains("mecklenburg")) {
+            return "Mecklenburg"
+        } else if (addr.contains("union")) {
+            return "Union"
+        } else if (addr.contains("cabarrus")) {
+            return "Cabarrus"
+        }
+        
+        val unionTowns = listOf("monroe", "waxhaw", "indian trail", "stallings", "marvin", "weddington", "wesley chapel", "wingate", "marshville", "unionville", "fairview", "lake park")
+        for (town in unionTowns) {
+            if (addr.contains(town)) {
+                return "Union"
+            }
+        }
+        
+        val cabarrusTowns = listOf("concord", "kannapolis", "harrisburg", "mount pleasant", "midland")
+        for (town in cabarrusTowns) {
+            if (addr.contains(town)) {
+                return "Cabarrus"
+            }
+        }
+        
+        return "Mecklenburg"
+    }
+
+    private fun fetchUnionParcelInfo(x: Double, y: Double): JSONObject? {
+        try {
+            val geomObj = JSONObject().apply {
+                put("xmin", x - 0.0001)
+                put("ymin", y - 0.0001)
+                put("xmax", x + 0.0001)
+                put("ymax", y + 0.0001)
+                put("spatialReference", JSONObject().apply { put("wkid", 4326) })
+            }
+            val geomString = URLEncoder.encode(geomObj.toString(), "UTF-8")
+            val url = "https://atlas.unioncountync.gov/server/rest/services/Property_Tax_Live/Parcels/MapServer/0/query?geometry=$geomString&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json"
+            
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0")
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val jsonStr = response.body?.string() ?: return null
+                val json = JSONObject(jsonStr)
+                val features = json.optJSONArray("features") ?: return null
+                if (features.length() > 0) {
+                    return features.getJSONObject(0).optJSONObject("attributes")
+                }
+            }
+        } catch (e: Exception) {
+            println("Union Parcel Query Error: ${e.message}")
+        }
+        return null
+    }
+
+    private fun fetchUnionAssessedValue(parcelNumber: String): JSONObject? {
+        try {
+            val whereClause = URLEncoder.encode("parcel_number = '$parcelNumber'", "UTF-8")
+            val url = "https://atlas.unioncountync.gov/server/rest/services/Property_Tax_Live/Assessed_Value/MapServer/0/query?where=$whereClause&outFields=*&returnGeometry=false&f=json"
+            
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0")
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val jsonStr = response.body?.string() ?: return null
+                val json = JSONObject(jsonStr)
+                val features = json.optJSONArray("features") ?: return null
+                if (features.length() > 0) {
+                    return features.getJSONObject(0).optJSONObject("attributes")
+                }
+            }
+        } catch (e: Exception) {
+            println("Union Assessed Value Query Error: ${e.message}")
+        }
+        return null
+    }
+
+    private fun fetchCabarrusParcelInfo(x: Double, y: Double): JSONObject? {
+        try {
+            val geomObj = JSONObject().apply {
+                put("xmin", x - 0.0001)
+                put("ymin", y - 0.0001)
+                put("xmax", x + 0.0001)
+                put("ymax", y + 0.0001)
+                put("spatialReference", JSONObject().apply { put("wkid", 4326) })
+            }
+            val geomString = URLEncoder.encode(geomObj.toString(), "UTF-8")
+            val url = "https://location.cabarruscounty.us/arcgishost/rest/services/ParcelsDash/MapServer/4/query?geometry=$geomString&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json"
+            
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0")
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val jsonStr = response.body?.string() ?: return null
+                val json = JSONObject(jsonStr)
+                val features = json.optJSONArray("features") ?: return null
+                if (features.length() > 0) {
+                    return features.getJSONObject(0).optJSONObject("attributes")
+                }
+            }
+        } catch (e: Exception) {
+            println("Cabarrus Parcel Query Error: ${e.message}")
+        }
+        return null
+    }
+
+    private fun fetchCabarrusTaxInfo(objectId: Int): JSONObject? {
+        try {
+            val url = "https://location.cabarruscounty.us/arcgishost/rest/services/TaxParcelsDash/TaxParcelsDash/MapServer/0/query?where=OBJECTID%20%3D%20$objectId&outFields=*&returnGeometry=false&f=json"
+            
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0")
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val jsonStr = response.body?.string() ?: return null
+                val json = JSONObject(jsonStr)
+                val features = json.optJSONArray("features") ?: return null
+                if (features.length() > 0) {
+                    return features.getJSONObject(0).optJSONObject("attributes")
+                }
+            }
+        } catch (e: Exception) {
+            println("Cabarrus Tax Query Error: ${e.message}")
+        }
+        return null
+    }
+
+    private suspend fun searchSpatialestByOwner(county: String, first: String, last: String): List<OwnerSearchResult> {
+        val cleanFirst = first.uppercase()
+        val cleanLast = last.uppercase()
+        
+        // 1. Try search with full term "last, first"
+        val term = if (cleanFirst.isEmpty()) cleanLast else "$cleanLast, $cleanFirst"
+        var results = executeSpatialestQuery(county, term, 25)
+        
+        // 2. Fallback: if no results and both names are present, query by last name and filter locally
+        if (results.isEmpty() && cleanFirst.isNotEmpty() && cleanLast.isNotEmpty()) {
+            val fallbackResults = executeSpatialestQuery(county, cleanLast, 100)
+            results = fallbackResults.filter { item ->
+                item.owner.uppercase().contains(cleanFirst)
+            }
+        }
+        
+        return results
+    }
+
+    private suspend fun executeSpatialestQuery(county: String, term: String, limit: Int): List<OwnerSearchResult> = withContext(Dispatchers.IO) {
+        val urlMain = "https://property.spatialest.com/nc/$county/"
+        val requestMain = Request.Builder()
+            .url(urlMain)
+            .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+        
+        try {
+            client.newCall(requestMain).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList<OwnerSearchResult>()
+                val html = response.body?.string() ?: return@withContext emptyList<OwnerSearchResult>()
+                
+                // Extract CSRF Token
+                var csrfToken = ""
+                val regexToken = Regex("\"csrfToken\":\"([^\"]+)\"")
+                val match = regexToken.find(html)
+                if (match != null) {
+                    csrfToken = match.groupValues[1]
+                } else {
+                    val regexMeta = Regex("name=\"csrf-token\"\\s+content=\"([^\"]+)\"")
+                    val matchMeta = regexMeta.find(html)
+                    if (matchMeta != null) {
+                        csrfToken = matchMeta.groupValues[1]
+                    }
+                }
+                
+                if (csrfToken.isEmpty()) return@withContext emptyList<OwnerSearchResult>()
+                
+                val urlSearchPost = "https://property.spatialest.com/nc/$county/api/v2/search"
+                val bodyObj = JSONObject().apply {
+                    put("filters", JSONObject().apply {
+                        put("term", term)
+                    })
+                    put("page", 1)
+                    put("limit", limit)
+                }
+                val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                val body = bodyObj.toString().toRequestBody(mediaType)
+                
+                val requestPost = Request.Builder()
+                    .url(urlSearchPost)
+                    .post(body)
+                    .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .addHeader("Referer", "https://property.spatialest.com/nc/$county/")
+                    .addHeader("X-CSRF-TOKEN", csrfToken)
+                    .addHeader("X-Requested-With", "XMLHttpRequest")
+                    .build()
+                
+                client.newCall(requestPost).execute().use { respPost ->
+                    if (respPost.isSuccessful) {
+                        val resStr = respPost.body?.string() ?: return@withContext emptyList<OwnerSearchResult>()
+                        val jsonPost = JSONObject(resStr)
+                        val results = jsonPost.optJSONArray("results") ?: return@withContext emptyList<OwnerSearchResult>()
+                        
+                        val list = mutableListOf<OwnerSearchResult>()
+                        for (i in 0 until results.length()) {
+                            val res = results.getJSONObject(i)
+                            var address = ""
+                            var owner = ""
+                            val display = res.optJSONArray("display")
+                            if (display != null) {
+                                for (j in 0 until display.length()) {
+                                    val item = display.getJSONObject(j)
+                                    val id = item.optString("id")
+                                    if (id == "location_address" || id == "PHYSSTRADD") {
+                                        address = item.optString("value")
+                                    } else if (id == "owner" || id == "owners" || id == "header_owners" || id == "ownernames") {
+                                        owner = item.optString("value")
+                                    }
+                                }
+                            }
+                            
+                            val pid = res.optString("ParcelIdentifier", "")
+                            
+                            if (owner.isEmpty()) {
+                                val header = res.optJSONObject("header")
+                                if (header != null) {
+                                    owner = header.optString("owners", "")
+                                }
+                            }
+                            
+                            if (owner.isEmpty()) {
+                                owner = "Found Registry Entry"
+                            }
+                            
+                            list.add(OwnerSearchResult(owner, address, pid))
+                        }
+                        return@withContext list
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            println("Spatialest query failed for $county: ${e.message}")
+        }
+        return@withContext emptyList<OwnerSearchResult>()
+    }
+
+    private suspend fun searchMecklenburgByOwner(first: String, last: String): List<OwnerSearchResult> {
+        return searchSpatialestByOwner("mecklenburg", first, last)
+    }
+
+    private suspend fun searchUnionByOwner(first: String, last: String): List<OwnerSearchResult> {
+        return searchSpatialestByOwner("union", first, last)
+    }
+
+    private suspend fun searchCabarrusByOwner(first: String, last: String): List<OwnerSearchResult> = withContext(Dispatchers.IO) {
+        var whereClause = "AcctName1 LIKE '%$last%'"
+        if (first.isNotEmpty()) {
+            whereClause += " AND (AcctName1 LIKE '%$first%' OR AcctName2 LIKE '%$first%')"
+        }
+        
+        try {
+            val encodedWhere = URLEncoder.encode(whereClause, "UTF-8")
+            val url = "https://location.cabarruscounty.us/arcgishost/rest/services/TaxParcelsDash/TaxParcelsDash/MapServer/0/query?where=$encodedWhere&outFields=*&returnGeometry=false&f=json"
+            
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0")
+                .build()
+                
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList<OwnerSearchResult>()
+                val jsonStr = response.body?.string() ?: return@withContext emptyList<OwnerSearchResult>()
+                val json = JSONObject(jsonStr)
+                val features = json.optJSONArray("features") ?: return@withContext emptyList<OwnerSearchResult>()
+                
+                val list = mutableListOf<OwnerSearchResult>()
+                val limit = minOf(features.length(), 25)
+                for (i in 0 until limit) {
+                    val attrs = features.getJSONObject(i).optJSONObject("attributes") ?: continue
+                    val acct1 = attrs.optString("AcctName1", "")
+                    val acct2 = attrs.optString("AcctName2", "")
+                    val owner = if (acct2.isEmpty()) acct1 else "$acct1 & $acct2"
+                    val nbh = attrs.optString("NBH_NAME", "")
+                    val pid = attrs.optString("OBJECTID", "")
+                    
+                    list.add(OwnerSearchResult(owner, if (nbh.isEmpty()) "" else "Neighborhood: $nbh", pid))
+                }
+                return@withContext list
+            }
+        } catch (e: Exception) {
+            println("Cabarrus owner search failed: ${e.message}")
+        }
+        return@withContext emptyList<OwnerSearchResult>()
+    }
+
+    suspend fun searchPropertiesByOwner(firstName: String, lastName: String): String = withContext(Dispatchers.IO) {
+        val cleanFirst = firstName.trim().uppercase()
+        val cleanLast = lastName.trim().uppercase()
+        
+        if (cleanFirst.isEmpty() && cleanLast.isEmpty()) {
+            return@withContext "Please enter a first name or last name to search."
+        }
+        
+        coroutineScope {
+            val meckDeferred = async { searchMecklenburgByOwner(cleanFirst, cleanLast) }
+            val unionDeferred = async { searchUnionByOwner(cleanFirst, cleanLast) }
+            val cabarrusDeferred = async { searchCabarrusByOwner(cleanFirst, cleanLast) }
+            
+            val meckList = meckDeferred.await()
+            val unionList = unionDeferred.await()
+            val cabList = cabarrusDeferred.await()
+            
+            val sb = StringBuilder()
+            sb.append("### 🔍 Owner Search Results\n")
+            sb.append("Searched for: **$cleanFirst $cleanLast**\n\n")
+            
+            var foundAny = false
+            
+            if (meckList.isNotEmpty()) {
+                foundAny = true
+                sb.append("#### 📋 Mecklenburg County (${meckList.size} found)\n")
+                for (item in meckList) {
+                    sb.append("*   **Owner(s)**: ${item.owner}\n")
+                    if (item.address.isNotEmpty()) {
+                        sb.append("    *   Address: ${item.address}\n")
+                    }
+                    sb.append("    *   Parcel ID: [${item.pid}](https://property.spatialest.com/nc/mecklenburg/#/property/${item.pid}) (Polaris: [Link](https://polaris3g.mecklenburgcountync.gov/address/${item.pid}))\n")
+                }
+                sb.append("\n")
+            }
+            
+            if (unionList.isNotEmpty()) {
+                foundAny = true
+                sb.append("#### 📋 Union County (${unionList.size} found)\n")
+                for (item in unionList) {
+                    sb.append("*   **Owner(s)**: ${item.owner}\n")
+                    if (item.address.isNotEmpty()) {
+                        sb.append("    *   Address: ${item.address}\n")
+                    }
+                    sb.append("    *   Parcel ID: [${item.pid}](https://property.spatialest.com/nc/union/#/property/${item.pid})\n")
+                }
+                sb.append("\n")
+            } else {
+                sb.append("#### 📋 Union County\n")
+                sb.append("*   No properties found in Union County Spatialest registry. (Or search manually on the [Union County DevNet Tax Portal](https://unionnc-tax.devnetwedge.com/))\n\n")
+            }
+            
+            if (cabList.isNotEmpty()) {
+                foundAny = true
+                sb.append("#### 📋 Cabarrus County (${cabList.size} found)\n")
+                for (item in cabList) {
+                    sb.append("*   **Owner(s)**: ${item.owner}\n")
+                    if (item.address.isNotEmpty()) {
+                        sb.append("    *   Address: ${item.address}\n")
+                    }
+                    sb.append("    *   Parcel ID: [${item.pid}](https://tax.cabarruscounty.us/)\n")
+                }
+                sb.append("\n")
+            }
+            
+            if (!foundAny) {
+                return@coroutineScope "### 🔍 Owner Search Results\nNo properties found for **$cleanFirst $cleanLast** in Mecklenburg, Union, or Cabarrus counties.\n\n*Note: You can try searching manually on the [Union County DevNet Tax Portal](https://unionnc-tax.devnetwedge.com/).*"
+            }
+            
+            sb.toString()
+        }
     }
 }

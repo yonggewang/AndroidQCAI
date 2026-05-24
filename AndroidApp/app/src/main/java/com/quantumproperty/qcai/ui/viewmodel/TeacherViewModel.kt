@@ -35,6 +35,7 @@ import android.content.ClipboardManager
 import android.content.ClipData
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
+import com.quantumproperty.qcai.data.PropertyDataService
 
 enum class DisplayMode {
     WEB, CHAT
@@ -178,6 +179,8 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isTunnelConnected = MutableStateFlow(false)
     val isTunnelConnected = _isTunnelConnected.asStateFlow()
+    
+    var lastRealEstateRegistryData: String? = null
     
     private val _gatewayCommand = MutableStateFlow("openclaw gateway --tailscale serve")
     val gatewayCommand = _gatewayCommand.asStateFlow()
@@ -919,6 +922,46 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         _recommendations.value = emptyList()
     }
 
+    fun searchRealEstateByOwner(firstName: String, lastName: String) {
+        val cleanFirst = firstName.trim()
+        val cleanLast = lastName.trim()
+        if (cleanFirst.isEmpty() && cleanLast.isEmpty()) return
+        
+        ttsManager?.stop()
+        _selectedTopic.value = AITopic.REAL_ESTATE
+        _displayMode.value = DisplayMode.CHAT
+        _messages.value = emptyList()
+        _isLoading.value = true
+        
+        val isChinese = _appLanguage.value == AppLanguage.CHINESE
+        val userMessageText = if (isChinese) {
+            "搜索业主: $cleanLast $cleanFirst"
+        } else {
+            "Search Owner: $cleanFirst $cleanLast"
+        }
+        
+        val userMsg = ChatMessage(text = userMessageText, isUser = true)
+        _messages.value = _messages.value + userMsg
+        
+        viewModelScope.launch {
+            try {
+                val resultMarkdown = PropertyDataService().searchPropertiesByOwner(cleanFirst, cleanLast)
+                val botMsg = ChatMessage(text = resultMarkdown, isUser = false)
+                _messages.value = _messages.value + botMsg
+            } catch (e: Exception) {
+                e.printStackTrace()
+                val errorMsg = ChatMessage(
+                    text = if (isChinese) "⚠️ 搜索出错: ${e.message}" else "⚠️ Search error: ${e.message}",
+                    isUser = false
+                )
+                _messages.value = _messages.value + errorMsg
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+
     fun setLanguage(language: AppLanguage) {
         _appLanguage.value = language
         // Immediately refresh current URL and topic if needed
@@ -1237,6 +1280,10 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         
         val activeTopic = explicitTopic ?: _selectedTopic.value
 
+        if (customPrompt == null) {
+            lastRealEstateRegistryData = null
+        }
+
         if (activeTopic != AITopic.CLT_VIBE && activeTopic != AITopic.STOCK) {
              _displayMode.value = DisplayMode.CHAT
         }
@@ -1289,6 +1336,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     displayText = responseText.substring(0, startIdx).trim()
                 }
 
+                if (activeTopic == AITopic.REAL_ESTATE && lastRealEstateRegistryData != null) {
+                    displayText = lastRealEstateRegistryData + "\n\n" + displayText
+                    lastRealEstateRegistryData = null
+                }
+
                 val aiMsg = ChatMessage(text = displayText, isUser = false, extraData = extraData)
                 _messages.value = _messages.value + aiMsg
                 
@@ -1300,6 +1352,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     ttsManager?.speak(responseText)
                 }
             } catch (e: Exception) {
+                lastRealEstateRegistryData = null
                 handleError(e.message)
             } finally {
                 _isLoading.value = false
@@ -1502,6 +1555,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                 basePrompt
             }
             
+            lastRealEstateRegistryData = gisResult.formattedData
             _isLoading.value = false
             sendMessage(text = address, customPrompt = finalPrompt)
         }

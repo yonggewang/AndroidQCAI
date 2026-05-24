@@ -138,6 +138,7 @@ fun TeacherScreen(
                     onDismiss = { viewModel.dismissAddressInput() },
                     onConfirm = { address -> viewModel.analyzeRealEstate(address) },
                     onChatWithAI = { viewModel.startAIChat() },
+                    onSearchOwner = { firstName, lastName -> viewModel.searchRealEstateByOwner(firstName, lastName) },
                     modifier = Modifier.padding(16.dp),
                     appLanguage = appLanguage
                 )

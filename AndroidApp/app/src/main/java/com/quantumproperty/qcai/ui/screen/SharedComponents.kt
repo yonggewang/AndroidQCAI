@@ -11,6 +11,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Search
+
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -304,6 +306,7 @@ fun RealEstateInputArea(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     onChatWithAI: () -> Unit,
+    onSearchOwner: (String, String) -> Unit,
     modifier: Modifier = Modifier,
     appLanguage: AppLanguage
 ) {
@@ -453,36 +456,144 @@ fun RealEstateInputArea(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
+        Button(
+            onClick = {
+                onSearchOwner(ownerFirstName, ownerLastName)
+                onDismiss()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+            enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Button(
-                onClick = {
-                    val cleanFirst = android.net.Uri.encode(ownerFirstName.trim().replace(" ", "+"))
-                    val cleanLast = android.net.Uri.encode(ownerLastName.trim().replace(" ", "+"))
-                    val url = "https://polaris3g.mecklenburgcountync.gov/ownerfull/$cleanFirst+$cleanLast"
-                    com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
-                enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
-                modifier = Modifier.weight(1f)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                Text("Polaris", fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isEnglish) "One-Click Multi-County Search" else "一键多县搜索",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Mecklenburg Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isEnglish) "Meck:" else "麦克伦堡:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(85.dp)
+                )
+                Button(
+                    onClick = {
+                        val cleanFirst = android.net.Uri.encode(ownerFirstName.trim().replace(" ", "+"))
+                        val cleanLast = android.net.Uri.encode(ownerLastName.trim().replace(" ", "+"))
+                        val url = "https://polaris3g.mecklenburgcountync.gov/ownerfull/$cleanFirst+$cleanLast"
+                        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                    enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Polaris", fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = {
+                        val cleanFirst = android.net.Uri.encode(ownerFirstName.trim())
+                        val cleanLast = android.net.Uri.encode(ownerLastName.trim())
+                        val url = "https://property.spatialest.com/nc/mecklenburg/#/search/?term=$cleanLast%2C%20$cleanFirst&page=1"
+                        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Spatialest", fontWeight = FontWeight.Bold)
+                }
             }
 
-            Button(
-                onClick = {
-                    val cleanFirst = android.net.Uri.encode(ownerFirstName.trim())
-                    val cleanLast = android.net.Uri.encode(ownerLastName.trim())
-                    val url = "https://property.spatialest.com/nc/mecklenburg/#/search/?term=$cleanLast%2C%20$cleanFirst&page=1"
-                    com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
-                modifier = Modifier.weight(1f)
+            // Union Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Spatialest", fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isEnglish) "Union:" else "联合县:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(85.dp)
+                )
+                Button(
+                    onClick = {
+                        val cleanFirst = android.net.Uri.encode(ownerFirstName.trim())
+                        val cleanLast = android.net.Uri.encode(ownerLastName.trim())
+                        val url = "https://property.spatialest.com/nc/union/#/search/?term=$cleanLast%2C%20$cleanFirst&page=1"
+                        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Spatialest", fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = {
+                        val url = "https://unionnc-tax.devnetwedge.com/"
+                        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                    enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (isEnglish) "Tax Portal" else "税务系统", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Cabarrus Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isEnglish) "Cabarrus:" else "卡巴勒斯:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(85.dp)
+                )
+                Button(
+                    onClick = {
+                        val url = "https://tax.cabarruscounty.us/"
+                        com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0)),
+                    enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (isEnglish) "Tax Portal" else "税务系统", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
