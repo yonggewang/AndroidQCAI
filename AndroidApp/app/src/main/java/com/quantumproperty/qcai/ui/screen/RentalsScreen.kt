@@ -62,7 +62,10 @@ fun RentalsScreen(
             // Only show FAB for verified members (trustLevel > 0)
             if (userProfile != null && userProfile.vipLevel > 0) {
                 FloatingActionButton(
-                    onClick = { showCreateDialog = true },
+                    onClick = {
+                        viewModel.clearError()
+                        showCreateDialog = true
+                    },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
                     Icon(Icons.Default.Add, "Create Listing")
@@ -162,7 +165,12 @@ fun RentalsScreen(
     // Create Rental Dialog
     if (showCreateDialog) {
         CreateRentalDialog(
-            onDismiss = { showCreateDialog = false },
+            isLoading = isLoading,
+            errorMessage = errorMessage,
+            onDismiss = {
+                viewModel.clearError()
+                showCreateDialog = false
+            },
             onCreate = { title, description, price, location, rentalType, contactInfo, imageFile ->
                 viewModel.createRental(title, description, price, location, rentalType, contactInfo, imageFile) {
                     showCreateDialog = false
@@ -314,9 +322,9 @@ fun RentalCard(
                     }
                 }
                 
-                // Delete button - only for owner or super user (Level 99)
+                // Delete button - only for owner or super user (Level 99+)
                 if (userProfile != null && 
-                    (rental.authorUsername == userProfile.username || userProfile.vipLevel == 99)) {
+                    (rental.authorUsername == userProfile.username || userProfile.isAdmin)) {
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,
@@ -333,6 +341,8 @@ fun RentalCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateRentalDialog(
+    isLoading: Boolean,
+    errorMessage: String?,
     onDismiss: () -> Unit,
     onCreate: (String, String, Double, String, String, String?, File?) -> Unit
 ) {
@@ -353,7 +363,7 @@ fun CreateRentalDialog(
     }
     
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isLoading) onDismiss() },
         title = { Text("New Listing") },
         text = {
             Column(
@@ -362,6 +372,20 @@ fun CreateRentalDialog(
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (isLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+
                 // Type Selector
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -369,15 +393,17 @@ fun CreateRentalDialog(
                 ) {
                     FilterChip(
                         selected = rentalType == "offer",
-                        onClick = { rentalType = "offer" },
+                        onClick = { if (!isLoading) rentalType = "offer" },
                         label = { Text("House for Rent") },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading
                     )
                     FilterChip(
                         selected = rentalType == "request",
-                        onClick = { rentalType = "request" },
+                        onClick = { if (!isLoading) rentalType = "request" },
                         label = { Text("Seeking Rental") },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enabled = !isLoading
                     )
                 }
                 
@@ -385,7 +411,8 @@ fun CreateRentalDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Title (e.g. 2BR Apartment in Uptown)") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
                 )
                 
                 OutlinedTextField(
@@ -394,21 +421,24 @@ fun CreateRentalDialog(
                     label = { Text("Monthly Rent") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    prefix = { Text("$") }
+                    prefix = { Text("$") },
+                    enabled = !isLoading
                 )
                 
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it },
                     label = { Text("Location (Address or Area)") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
                 )
                 
                 OutlinedTextField(
                     value = contactInfo,
                     onValueChange = { contactInfo = it },
                     label = { Text("Contact Info (Phone/Email)") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
                 )
                 
                 OutlinedTextField(
@@ -418,13 +448,15 @@ fun CreateRentalDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(100.dp),
-                    maxLines = 4
+                    maxLines = 4,
+                    enabled = !isLoading
                 )
                 
                 // Image Picker
                 Button(
                     onClick = { imagePicker.launch("image/*") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
                 ) {
                     Icon(Icons.Default.AddPhotoAlternate, "Add Photo")
                     Spacer(modifier = Modifier.width(8.dp))
@@ -494,13 +526,16 @@ fun CreateRentalDialog(
                     val contact = if (contactInfo.isNotEmpty()) contactInfo else null
                     onCreate(title, description, priceValue, location, rentalType, contact, imageFile)
                 },
-                enabled = title.isNotEmpty() && price.isNotEmpty()
+                enabled = title.isNotEmpty() && price.isNotEmpty() && !isLoading
             ) {
                 Text("Post")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isLoading
+            ) {
                 Text("Cancel")
             }
         }

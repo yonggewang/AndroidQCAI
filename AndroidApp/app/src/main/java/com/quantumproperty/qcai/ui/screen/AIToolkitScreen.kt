@@ -59,6 +59,7 @@ fun AIToolkitScreen(viewModel: TeacherViewModel) {
                 icon = Icons.Default.Home, 
                 color = Color(0xFF2196F3)
             ) { 
+                 viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.REAL_ESTATE)
                  viewModel.showAIRealEstateTools()
             },
             ToolkitItem(
@@ -110,6 +111,11 @@ fun AIToolkitScreen(viewModel: TeacherViewModel) {
 
     if (selectedTopic == com.quantumproperty.qcai.data.AITopic.STOCK) {
         StockScreen(
+            onBack = { viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.NONE) }
+        )
+    } else if (selectedTopic == com.quantumproperty.qcai.data.AITopic.REAL_ESTATE) {
+        TeacherScreen(
+            viewModel = viewModel,
             onBack = { viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.NONE) }
         )
     } else {

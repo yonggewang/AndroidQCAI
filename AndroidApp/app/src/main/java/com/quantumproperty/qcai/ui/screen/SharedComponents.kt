@@ -27,6 +27,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.quantumproperty.qcai.ui.viewmodel.TeacherViewModel
 
 import com.quantumproperty.qcai.data.AppLanguage
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 // Extracted from TeacherScreen.kt to be shared
 @Composable
@@ -309,7 +311,11 @@ fun RealEstateInputArea(
     val isEnglish = appLanguage == AppLanguage.ENGLISH
     val isSpanish = appLanguage == AppLanguage.SPANISH
 
-    Column(modifier = modifier) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var isResolvingId by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
         Text(
             text = when {
                 isSpanish -> "Analizar Propiedad"
@@ -334,7 +340,7 @@ fun RealEstateInputArea(
             },
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = onChatWithAI) {
                 Text(
@@ -346,7 +352,10 @@ fun RealEstateInputArea(
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = { onConfirm(address); onDismiss() }) {
+            Button(
+                onClick = { onConfirm(address); onDismiss() },
+                enabled = address.isNotBlank()
+            ) {
                 Text(
                     when {
                         isSpanish -> "Analizar"
@@ -354,6 +363,126 @@ fun RealEstateInputArea(
                         else -> "开始分析"
                     }
                 )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    isResolvingId = true
+                    scope.launch {
+                        val res = com.quantumproperty.qcai.data.PropertyDataService().resolveSpatialestId(address)
+                        isResolvingId = false
+                        if (res != null) {
+                            com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, "https://polaris3g.mecklenburgcountync.gov/address/$res")
+                        } else {
+                            android.widget.Toast.makeText(context, if (isEnglish) "Could not resolve property ID" else "无法解析房产 ID", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                enabled = !isResolvingId && address.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) {
+                if (isResolvingId) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Polaris", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Button(
+                onClick = {
+                    isResolvingId = true
+                    scope.launch {
+                        val res = com.quantumproperty.qcai.data.PropertyDataService().resolveSpatialestId(address)
+                        isResolvingId = false
+                        if (res != null) {
+                            com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, "https://property.spatialest.com/nc/mecklenburg/#/property/$res")
+                        } else {
+                            android.widget.Toast.makeText(context, if (isEnglish) "Could not resolve property ID" else "无法解析房产 ID", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                enabled = !isResolvingId && address.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) {
+                if (isResolvingId) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Spatialest", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = if (isEnglish) "Owner Search" else "业主搜索",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        var ownerFirstName by remember { mutableStateOf("") }
+        var ownerLastName by remember { mutableStateOf("") }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = ownerFirstName,
+                onValueChange = { ownerFirstName = it },
+                label = { Text(if (isEnglish) "First Name" else "名字") },
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = ownerLastName,
+                onValueChange = { ownerLastName = it },
+                label = { Text(if (isEnglish) "Last Name" else "姓氏") },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    val cleanFirst = android.net.Uri.encode(ownerFirstName.trim().replace(" ", "+"))
+                    val cleanLast = android.net.Uri.encode(ownerLastName.trim().replace(" ", "+"))
+                    val url = "https://polaris3g.mecklenburgcountync.gov/ownerfull/$cleanFirst+$cleanLast"
+                    com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Polaris", fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                onClick = {
+                    val cleanFirst = android.net.Uri.encode(ownerFirstName.trim())
+                    val cleanLast = android.net.Uri.encode(ownerLastName.trim())
+                    val url = "https://property.spatialest.com/nc/mecklenburg/#/search/?term=$cleanLast%2C%20$cleanFirst&page=1"
+                    com.quantumproperty.qcai.utils.BrowserUtils.openURL(context, url)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                enabled = ownerFirstName.isNotBlank() || ownerLastName.isNotBlank(),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Spatialest", fontWeight = FontWeight.Bold)
             }
         }
     }

@@ -228,9 +228,9 @@ fun EventCard(
                     color = MaterialTheme.colorScheme.primary
                 )
                 
-                // Delete button - only for owner or super user (Level 99)
+                // Delete button - only for owner or super user (Level 99+)
                 if (userProfile != null && 
-                    (event.authorUsername == userProfile.username || userProfile.vipLevel == 99)) {
+                    (event.authorUsername == userProfile.username || userProfile.isAdmin)) {
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,

@@ -1,0 +1,41 @@
+{
+    "utilities": {
+        "apartment_1br": {
+            "electric": 110.0,
+            "water": 45.0,
+            "trash": 25.0,
+            "internet": 70.0,
+            "total_avg": 250.0
+        },
+        "apartment_2br": {
+            "electric": 160.0,
+            "water": 65.0,
+            "trash": 25.0,
+            "internet": 70.0,
+            "total_avg": 320.0
+        },
+        "house_3br": {
+            "electric": 240.0,
+            "water": 85.0,
+            "trash": 32.0,
+            "internet": 80.0,
+            "total_avg": 437.0
+        }
+    },
+    "housing": {
+        "rent_1br_avg": 1650.0,
+        "rent_2br_avg": 2200.0,
+        "mortgage_median": 2800.0
+    },
+    "general": {
+        "groceries_single": 450.0,
+        "groceries_family_4": 1200.0,
+        "transit_pass": 88.0,
+        "gas_avg_gal": 3.15
+    },
+    "trends": {
+        "annual_increase": "+4.8%",
+        "market_sentiment": "Moderately Expensive",
+        "description": "Charlotte's COL is 2% lower than the national average, but housing costs in urban hubs like South End are rising rapidly."
+    }
+}

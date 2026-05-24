@@ -262,6 +262,133 @@ fun ProfileContent(viewModel: TeacherViewModel) {
                 }
             }
             
+            // 5. ADVANCED SETTINGS GROUP
+            item {
+                val apiKeySetupReason by viewModel.apiKeySetupReason.collectAsState()
+                var localOpenAIKey by remember { mutableStateOf(com.quantumproperty.qcai.data.PreferenceManager.userOpenAIKey) }
+                var localGeminiKey by remember { mutableStateOf(com.quantumproperty.qcai.data.PreferenceManager.userGeminiKey) }
+                val selectedEngine by viewModel.selectedEngine.collectAsState()
+
+                SettingsGroup(
+                    when {
+                        isSpanish -> "Ajustes Avanzados"
+                        isEnglish -> "Advanced Settings"
+                        else -> "高级设置"
+                    }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (apiKeySetupReason != null) {
+                            Surface(
+                                color = Color.Red.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                            ) {
+                                Text(
+                                    text = apiKeySetupReason ?: "",
+                                    color = Color.Red,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(12.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = when {
+                                isSpanish -> "Esta aplicación se ejecuta con una clave API de Gemini limitada por velocidad. Si desea traer su propia clave de IA, complete lo siguiente:"
+                                isEnglish -> "This app runs using a rate-limited Gemini API key. If you want to bring your own AI key, please fill them in below:"
+                                else -> "本应用使用速率受限的 Gemini API 密钥运行。如果您想使用自己的 AI 密钥，请在下方填写："
+                            },
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        // Engine selection: Row of buttons
+                        Text(
+                            text = when {
+                                isSpanish -> "Seleccionar motor de IA predeterminado"
+                                isEnglish -> "Select Default AI Engine"
+                                else -> "选择默认 AI 引擎"
+                            },
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.setEngine(com.quantumproperty.qcai.data.AIEngine.CHATGPT)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (selectedEngine == com.quantumproperty.qcai.data.AIEngine.CHATGPT) Color(0xFFAF52DE) else Color.White.copy(alpha = 0.1f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("ChatGPT")
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.setEngine(com.quantumproperty.qcai.data.AIEngine.GEMINI)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (selectedEngine == com.quantumproperty.qcai.data.AIEngine.GEMINI) Color(0xFFAF52DE) else Color.White.copy(alpha = 0.1f),
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("Gemini")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // OpenAI key textfield
+                        OutlinedTextField(
+                            value = localOpenAIKey,
+                            onValueChange = {
+                                localOpenAIKey = it
+                                com.quantumproperty.qcai.data.PreferenceManager.userOpenAIKey = it
+                            },
+                            label = { Text("OpenAI API Key", color = Color.White.copy(alpha = 0.5f)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFAF52DE),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Gemini key textfield
+                        OutlinedTextField(
+                            value = localGeminiKey,
+                            onValueChange = {
+                                localGeminiKey = it
+                                com.quantumproperty.qcai.data.PreferenceManager.userGeminiKey = it
+                            },
+                            label = { Text("Gemini API Key", color = Color.White.copy(alpha = 0.5f)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFAF52DE),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                            )
+                        )
+                    }
+                }
+            }
+
              item {
                 Box(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), contentAlignment = Alignment.Center) {
                     Text(

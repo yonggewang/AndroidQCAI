@@ -1,0 +1,113 @@
+{
+    "salaries": {
+        "software engineer": {
+            "entry": 85000.0,
+            "mid": 125000.0,
+            "senior": 175000.0,
+            "trend": "+4.2%"
+        },
+        "data analyst": {
+            "entry": 65000.0,
+            "mid": 95000.0,
+            "senior": 135000.0,
+            "trend": "+3.8%"
+        },
+        "financial analyst": {
+            "entry": 72000.0,
+            "mid": 105000.0,
+            "senior": 155000.0,
+            "trend": "+2.5%"
+        },
+        "project manager": {
+            "entry": 78000.0,
+            "mid": 115000.0,
+            "senior": 165000.0,
+            "trend": "+5.1%"
+        },
+        "nurse": {
+            "entry": 68000.0,
+            "mid": 88000.0,
+            "senior": 110000.0,
+            "trend": "+6.2%"
+        },
+        "marketing manager": {
+            "entry": 62000.0,
+            "mid": 98000.0,
+            "senior": 145000.0,
+            "trend": "+3.1%"
+        },
+        "plumber": {
+            "entry": 48000.0,
+            "mid": 65000.0,
+            "senior": 92000.0,
+            "trend": "+5.8%"
+        },
+        "handyman": {
+            "entry": 38000.0,
+            "mid": 52000.0,
+            "senior": 75000.0,
+            "trend": "+4.5%"
+        },
+        "electrician": {
+            "entry": 52000.0,
+            "mid": 72000.0,
+            "senior": 98000.0,
+            "trend": "+6.1%"
+        },
+        "teacher": {
+            "entry": 46000.0,
+            "mid": 58000.0,
+            "senior": 78000.0,
+            "trend": "+2.8%"
+        },
+        "police officer": {
+            "entry": 54000.0,
+            "mid": 75000.0,
+            "senior": 95000.0,
+            "trend": "+3.4%"
+        },
+        "warehouse associate": {
+            "entry": 35000.0,
+            "mid": 45000.0,
+            "senior": 58000.0,
+            "trend": "+7.2%"
+        },
+        "real estate agent": {
+            "entry": 40000.0,
+            "mid": 85000.0,
+            "senior": 150000.0,
+            "trend": "+1.5%"
+        },
+        "retail associate": {
+            "entry": 32000.0,
+            "mid": 42000.0,
+            "senior": 55000.0,
+            "trend": "+2.1%"
+        },
+        "mechanic": {
+            "entry": 45000.0,
+            "mid": 68000.0,
+            "senior": 88000.0,
+            "trend": "+3.5%"
+        },
+        "server": {
+            "entry": 30000.0,
+            "mid": 45000.0,
+            "senior": 65000.0,
+            "trend": "+4.8%"
+        }
+    },
+    "employers": {
+        "atrium health": "🏥 Largest employer in NC. Values patient-first mindset and healthcare tech experience.",
+        "cms": "🍎 Charlotte-Mecklenburg Schools. Values educational equity, community engagement, and student-centered growth.",
+        "novant health": "🏥 Community healthcare leader. Passionately focused on the 'remarkable patient experience' and clinical empathy.",
+        "bank of america": "🏦 Financial giant. Values stability, compliance awareness, and fintech innovation.",
+        "wells fargo": "🐎 Major employer in Uptown. Heavy focus on risk management and customer-centric digital banking.",
+        "cmpd": "🚔 Charlotte-Mecklenburg Police. Values integrity, community service, and adaptive problem-solving.",
+        "honeywell": "🚀 Fortune 100 leader. Tech-focused, values agile methodology and global supply chain expertise.",
+        "duke energy": "⚡ Utility powerhouse. Values engineering excellence and sustainability focus.",
+        "lowes": "🏠 Retail tech leader. Focuses on e-commerce, UX, and supply chain logistics.",
+        "red ventures": "🚀 High-octane digital platform powerhouse. Values 'speed to market', data-driven decision making, and an entrepreneurial mindset.",
+        "nascar": "🏁 Iconic sports legacy. Values fan-first experiences, brand heritage, and digital media innovation."
+    }
+}

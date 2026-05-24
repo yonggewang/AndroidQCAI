@@ -1,5 +1,8 @@
 package com.quantumproperty.qcai.data
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
 enum class AppLanguage {
     CHINESE, ENGLISH, SPANISH
 }
@@ -64,11 +67,17 @@ data class TopMenuItem(
     val topic: AITopic
 )
 
+@Serializable
 data class UserProfile(
-    val uid: String = "",
-    val email: String = "",
-    val username: String = "",
-    val fullName: String = "",
-    val phoneNumber: String = "",
-    val vipLevel: Int = 1 // 0: Guest, 1: Registered, 99: Root
-)
+    @SerialName("id") val uid: String = "",
+    @SerialName("email") val email: String = "",
+    @SerialName("username") val username: String = "",
+    @SerialName("full_name") val fullName: String = "",
+    @SerialName("vip_level") val vipLevel: Int = 1, // 0: Guest, 1: Registered, 99: Root
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("blocked_users") val blockedUsers: List<String>? = emptyList(),
+    @SerialName("is_email_verified") val isEmailVerified: Boolean? = false
+) {
+    val isAdmin: Boolean
+        get() = vipLevel >= 99
+}

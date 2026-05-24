@@ -418,11 +418,22 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                     if (isExpanded) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             chatConfigSuggestions.forEach { suggestion ->
+                                val homeAddr = com.quantumproperty.qcai.data.PreferenceManager.homeAddress
+                                val promptText = suggestion.prompt.localized(isEnglish).let { originalText ->
+                                    if (homeAddr.isNotEmpty()) {
+                                        originalText
+                                            .replace("[your address]", homeAddr)
+                                            .replace("[address]", homeAddr)
+                                            .replace("[mi dirección]", homeAddr)
+                                    } else {
+                                        originalText
+                                    }
+                                }
                                 Surface(
                                     color = Color.White.copy(alpha = 0.05f),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth().clickable {
-                                        viewModel.sendMessage("[$energyLevelLabel Energy] ${suggestion.prompt.localized(isEnglish)}", explicitTopic = AITopic.CLT_VIBE)
+                                        viewModel.sendMessage("[$energyLevelLabel Energy] $promptText", explicitTopic = AITopic.CLT_VIBE)
                                     }
                                 ) {
                                     Row(
@@ -432,7 +443,7 @@ fun CLTVibeView(viewModel: TeacherViewModel) {
                                     ) {
                                         Text(text = suggestion.emoji, fontSize = 20.sp)
                                         Text(
-                                            text = suggestion.prompt.localized(isEnglish),
+                                            text = promptText,
                                             color = Color.White.copy(alpha = 0.9f),
                                             fontSize = 14.sp,
                                             modifier = Modifier.weight(1f)

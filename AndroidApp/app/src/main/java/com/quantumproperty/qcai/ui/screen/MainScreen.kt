@@ -297,7 +297,7 @@ fun MainScreen(viewModel: TeacherViewModel = viewModel()) {
             viewModel.closeGatewayChat()
         } else if (showCollegeAdmissions) {
             viewModel.closeCollegeAdmissions()
-        } else if (selectedTab == 3 && viewModel.selectedTopic.value == com.quantumproperty.qcai.data.AITopic.STOCK) {
+        } else if (selectedTab == 3 && (viewModel.selectedTopic.value == com.quantumproperty.qcai.data.AITopic.STOCK || viewModel.selectedTopic.value == com.quantumproperty.qcai.data.AITopic.REAL_ESTATE)) {
              viewModel.setTopic(com.quantumproperty.qcai.data.AITopic.NONE)
         } else if (selectedTab != 1) { // Changed from 0 to 1 because CLT AI is now Tab 1
             viewModel.setSelectedTab(1)

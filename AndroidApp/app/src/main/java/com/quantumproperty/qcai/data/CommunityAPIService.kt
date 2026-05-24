@@ -1,55 +1,86 @@
 package com.quantumproperty.qcai.data
 
-import android.net.Uri
-import com.google.firebase.auth.FirebaseAuth
-import com.google.gson.Gson
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.*
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 class CommunityAPIService {
-    private val baseUrl = "https://cyberpandaapp.com"
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
-    
-    private val gson = Gson()
-    
-    private suspend fun getAuthToken(): String {
-        val user = FirebaseAuth.getInstance().currentUser
-            ?: throw Exception("Not logged in")
-        return user.getIdToken(false).await().token
-            ?: throw Exception("Failed to get auth token")
+
+    @Serializable
+    private data class InsertEvent(
+        val title: String,
+        val description: String,
+        val location: String,
+        @SerialName("event_date") val eventDate: String,
+        @SerialName("author_username") val authorUsername: String,
+        @SerialName("author_id") val authorId: String,
+        @SerialName("image_url") val imageUrl: String?
+    )
+
+    @Serializable
+    private data class InsertItem(
+        val title: String,
+        val description: String,
+        val price: Double,
+        val condition: String,
+        @SerialName("is_sold") val isSold: Boolean,
+        @SerialName("author_username") val authorUsername: String,
+        @SerialName("author_id") val authorId: String,
+        @SerialName("image_url") val imageUrl: String?
+    )
+
+    @Serializable
+    private data class InsertRental(
+        val title: String,
+        val description: String,
+        val price: Double,
+        val location: String,
+        @SerialName("rental_type") val rentalType: String,
+        @SerialName("contact_info") val contactInfo: String?,
+        @SerialName("author_username") val authorUsername: String,
+        @SerialName("author_id") val authorId: String,
+        @SerialName("image_url") val imageUrl: String?
+    )
+
+    @Serializable
+    private data class ContentReport(
+        val reporter: String,
+        @SerialName("reported_user") val reportedUser: String,
+        val type: String,
+        @SerialName("content_type") val contentType: String,
+        @SerialName("content_id") val contentId: Int,
+        val reason: String
+    )
+
+    private suspend fun getAuthorDetails(): Pair<String, String> {
+        val user = supabase.auth.currentUserOrNull() ?: throw Exception("Not logged in")
+        val uid = user.id
+        val profile = supabase.postgrest["users"]
+            .select {
+                filter {
+                    eq("id", uid)
+                }
+            }
+            .decodeSingle<UserProfile>()
+        return Pair(uid, profile.username)
     }
 
     // MARK: - Events
     
     suspend fun fetchEvents(page: Int = 0): List<EventModel> = withContext(Dispatchers.IO) {
-        val url = "$baseUrl/events/?skip=${page * 20}&limit=20"
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to fetch events: ${response.code}")
-        }
-        
-        val json = response.body?.string() ?: "[]"
-        gson.fromJson(json, Array<EventModel>::class.java).toList()
+        supabase.postgrest["events"]
+            .select {
+                order("event_date", Order.ASCENDING)
+                range(page * 20L, (page + 1) * 20L - 1)
+            }
+            .decodeList<EventModel>()
     }
     
     suspend fun createEvent(
@@ -59,64 +90,37 @@ class CommunityAPIService {
         location: String,
         imageUrl: String?
     ) = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/events/"
-        
-        val jsonBody = JSONObject().apply {
-            put("title", title)
-            put("description", description)
-            put("event_date", eventDate)
-            put("location", location)
-            if (imageUrl != null) put("image_url", imageUrl)
-        }
-        
-        val requestBody = jsonBody.toString()
-            .toRequestBody("application/json".toMediaTypeOrNull())
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .post(requestBody)
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to create event: ${response.code}")
-        }
+        val (uid, username) = getAuthorDetails()
+        val newEvent = InsertEvent(
+            title = title,
+            description = description,
+            eventDate = eventDate,
+            location = location,
+            authorUsername = username,
+            authorId = uid,
+            imageUrl = imageUrl
+        )
+        supabase.postgrest["events"].insert(newEvent)
     }
     
     suspend fun deleteEvent(id: Int) = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/events/$id"
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .delete()
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to delete event: ${response.code}")
-        }
+        supabase.postgrest["events"]
+            .delete {
+                filter {
+                    eq("id", id)
+                }
+            }
     }
     
     // MARK: - Marketplace
     
     suspend fun fetchMarketplaceItems(page: Int = 0): List<MarketplaceItemModel> = withContext(Dispatchers.IO) {
-        val url = "$baseUrl/marketplace/?skip=${page * 20}&limit=20"
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to fetch marketplace items: ${response.code}")
-        }
-        
-        val json = response.body?.string() ?: "[]"
-        gson.fromJson(json, Array<MarketplaceItemModel>::class.java).toList()
+        supabase.postgrest["used_items"]
+            .select {
+                order("created_at", Order.DESCENDING)
+                range(page * 20L, (page + 1) * 20L - 1)
+            }
+            .decodeList<MarketplaceItemModel>()
     }
     
     suspend fun createMarketplaceItem(
@@ -126,69 +130,43 @@ class CommunityAPIService {
         condition: String,
         imageUrl: String?
     ) = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/marketplace/"
-        
-        val jsonBody = JSONObject().apply {
-            put("title", title)
-            put("description", description)
-            put("price", price)
-            put("condition", condition)
-            put("is_sold", false)
-            if (imageUrl != null) put("image_url", imageUrl)
-        }
-        
-        val requestBody = jsonBody.toString()
-            .toRequestBody("application/json".toMediaTypeOrNull())
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .post(requestBody)
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to create marketplace item: ${response.code}")
-        }
+        val (uid, username) = getAuthorDetails()
+        val newItem = InsertItem(
+            title = title,
+            description = description,
+            price = price,
+            condition = condition,
+            isSold = false,
+            authorUsername = username,
+            authorId = uid,
+            imageUrl = imageUrl
+        )
+        supabase.postgrest["used_items"].insert(newItem)
     }
     
     suspend fun deleteMarketplaceItem(id: Int) = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/marketplace/$id"
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .delete()
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to delete marketplace item: ${response.code}")
-        }
+        supabase.postgrest["used_items"]
+            .delete {
+                filter {
+                    eq("id", id)
+                }
+            }
     }
     
     // MARK: - Rentals
     
     suspend fun fetchRentals(page: Int = 0, type: String? = null): List<RentalModel> = withContext(Dispatchers.IO) {
-        var url = "$baseUrl/rentals/?skip=${page * 20}&limit=20"
-        if (type != null) {
-            url += "&rental_type=$type"
-        }
-        
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to fetch rentals: ${response.code}")
-        }
-        
-        val json = response.body?.string() ?: "[]"
-        gson.fromJson(json, Array<RentalModel>::class.java).toList()
+        supabase.postgrest["rentals"]
+            .select {
+                if (type != null) {
+                    filter {
+                        eq("rental_type", type)
+                    }
+                }
+                order("created_at", Order.DESCENDING)
+                range(page * 20L, (page + 1) * 20L - 1)
+            }
+            .decodeList<RentalModel>()
     }
     
     suspend fun createRental(
@@ -200,83 +178,73 @@ class CommunityAPIService {
         contactInfo: String?,
         imageUrl: String?
     ) = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/rentals/"
-        
-        val jsonBody = JSONObject().apply {
-            put("title", title)
-            put("description", description)
-            put("price", price)
-            put("location", location)
-            put("rental_type", rentalType)
-            if (contactInfo != null) put("contact_info", contactInfo)
-            if (imageUrl != null) put("image_url", imageUrl)
-        }
-        
-        val requestBody = jsonBody.toString()
-            .toRequestBody("application/json".toMediaTypeOrNull())
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .post(requestBody)
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to create rental: ${response.code}")
-        }
+        val (uid, username) = getAuthorDetails()
+        val newRental = InsertRental(
+            title = title,
+            description = description,
+            price = price,
+            location = location,
+            rentalType = rentalType,
+            contactInfo = contactInfo,
+            authorUsername = username,
+            authorId = uid,
+            imageUrl = imageUrl
+        )
+        supabase.postgrest["rentals"].insert(newRental)
     }
     
     suspend fun deleteRental(id: Int) = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/rentals/$id"
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .delete()
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("Failed to delete rental: ${response.code}")
-        }
+        supabase.postgrest["rentals"]
+            .delete {
+                filter {
+                    eq("id", id)
+                }
+            }
     }
     
     // MARK: - Image Upload
     
     suspend fun uploadImage(imageFile: File): String = withContext(Dispatchers.IO) {
-        val token = getAuthToken()
-        val url = "$baseUrl/upload/image"
-        
-        val requestBody = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart(
-                "file",
-                imageFile.name,
-                imageFile.asRequestBody("image/jpeg".toMediaTypeOrNull())
-            )
-            .build()
-        
-        val request = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .post(requestBody)
-            .build()
-        
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val errorText = response.body?.string() ?: "Unknown error"
-            throw Exception("Upload failed: $errorText")
-        }
-        
-        val json = response.body?.string() ?: throw Exception("Empty response")
-        val uploadResponse = gson.fromJson(json, UploadResponse::class.java)
-        "$baseUrl${uploadResponse.url}"
+        val filename = "${java.util.UUID.randomUUID().toString().lowercase()}.jpg"
+        val bytes = imageFile.readBytes()
+        val bucket = supabase.storage.from("uploads")
+        bucket.upload(filename, bytes)
+        bucket.publicUrl(filename)
     }
+
+    // MARK: - Content Reporting
     
-    private data class UploadResponse(val url: String)
+    suspend fun reportContent(
+        contentType: String,
+        contentId: Int,
+        authorUsername: String,
+        reason: String = "Objectionable content"
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val user = supabase.auth.currentUserOrNull() ?: return@withContext
+            val uid = user.id
+            val profile = supabase.postgrest["users"]
+                .select {
+                    filter {
+                        eq("id", uid)
+                    }
+                }
+                .decodeSingle<UserProfile>()
+            
+            val report = ContentReport(
+                reporter = profile.username,
+                reportedUser = authorUsername,
+                type = "report",
+                contentType = contentType,
+                contentId = contentId,
+                reason = reason
+            )
+            
+            supabase.postgrest["reports"].insert(report)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
     
     companion object {
         val instance = CommunityAPIService()

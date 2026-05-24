@@ -13,6 +13,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import io.github.jan.supabase.gotrue.auth
 
 class AIService {
 
@@ -28,7 +29,7 @@ class AIService {
     private val geminiEmbedEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
     private val pineconeEndpoint = "https://clt-vibe-rag-e13kol2.svc.aped-4627-b74a.pinecone.io/query"
     private val pineconeKey = "pcsk_7HuA7A_7T3VQ5Fuq6dTk6hwJPZedEJKU5Rk4pDk4PngnJstzMYSGzbpWJrwGaswWNUVNZj"
-    private val vercelEndpoint = "https://vercel-backendcltai.vercel.app/api/analyze"
+    private val vercelEndpoint = "https://vercel-backendcltai.vercel.app/api/analyze?teamId=team_DxHeE18WWzpaGC1GLeY3l6oQ"
 
     suspend fun sendMessage(
         text: String, 
@@ -36,11 +37,54 @@ class AIService {
         topic: AITopic, 
         language: AppLanguage,
         image: Bitmap? = null,
-        realEstateAddress: String? = null
+        realEstateAddress: String? = null,
+        customPrompt: String? = null
     ): String {
-        var context = ""
-        val geminiKey = PreferenceManager.geminiKey
+        val isEnglish = language == AppLanguage.ENGLISH
+        var geminiKey = PreferenceManager.geminiKey
+        var openAIKey = PreferenceManager.openAIKey
 
+        // Resolve and verify keys
+        when (engine) {
+            AIEngine.GEMINI -> {
+                val user = supabase.auth.currentUserOrNull()
+                if (user == null) {
+                    throw IOException(if (isEnglish) "Please log in to use AI features." else "请先登录以使用 AI 功能。")
+                }
+                
+                if (geminiKey.isEmpty()) {
+                    try {
+                        UserManager().loadAppSecrets()
+                        geminiKey = PreferenceManager.geminiKey
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    if (geminiKey.isEmpty()) {
+                        throw IOException(if (isEnglish) "Missing Gemini API Key. Please configure it in settings or check your database connection." else "无法获取 Gemini API 密钥，请在设置中配置或检查数据库连接。")
+                    }
+                }
+            }
+            AIEngine.CHATGPT -> {
+                val user = supabase.auth.currentUserOrNull()
+                if (user == null) {
+                    throw IOException(if (isEnglish) "Please log in to use AI features." else "请先登录以使用 AI 功能。")
+                }
+                
+                if (openAIKey.isEmpty()) {
+                    try {
+                        UserManager().loadAppSecrets()
+                        openAIKey = PreferenceManager.openAIKey
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    if (openAIKey.isEmpty()) {
+                        throw IOException(if (isEnglish) "Missing OpenAI API Key. Please configure it in settings or check your database connection." else "无法获取 OpenAI API 密钥，请在设置中配置或检查数据库连接。")
+                    }
+                }
+            }
+        }
+
+        var context = ""
         // RAG Logic for CLT Vibe
         if (topic == AITopic.CLT_VIBE && geminiKey.isNotEmpty()) {
             val ragContext = fetchContextFromPinecone(text, geminiKey)
@@ -49,28 +93,22 @@ class AIService {
             }
         }
 
-        val systemPrompt = generateSystemPrompt(topic, engine, language) + context
-        
-        val openAIKey = PreferenceManager.openAIKey
+        var processedPrompt = customPrompt ?: (generateSystemPrompt(topic, engine, language) + context)
+
+        if (topic == AITopic.REAL_ESTATE && customPrompt == null) {
+            val addressToSearch = realEstateAddress ?: extractAddress(text)
+            val freshData = fetchDataFromVercel(addressToSearch)
+            if (freshData != null) {
+                processedPrompt += "\n\n【重要：最新房产核实数据】\n以下数据来自实时搜索，请务必将其作为“事实”基础进行分析：\n$freshData"
+            }
+        }
 
         return when (engine) {
             AIEngine.CHATGPT -> {
-                if (openAIKey.isEmpty()) throw IOException("Missing OpenAI API Key")
-                
-                var processedPrompt = systemPrompt
-                if (topic == AITopic.REAL_ESTATE) {
-                    val addressToSearch = realEstateAddress ?: extractAddress(text)
-                    val freshData = fetchDataFromVercel(addressToSearch)
-                    if (freshData != null) {
-                        processedPrompt += "\n\n【重要：最新房产核实数据】\n以下数据来自实时搜索，请务必将其作为“事实”基础进行分析：\n$freshData"
-                    }
-                }
-                
                 sendToChatGPT(openAIKey, processedPrompt, text, image)
             }
             AIEngine.GEMINI -> {
-                if (geminiKey.isEmpty()) throw IOException("Missing Gemini API Key")
-                sendToGemini(geminiKey, systemPrompt, text, image)
+                sendToGemini(geminiKey, processedPrompt, text, image)
             }
         }
     }
@@ -320,10 +358,10 @@ class AIService {
         generationConfig.put("temperature", 1.0)
         
         val tools = JSONArray()
-        tools.put(JSONObject().put("google_search", JSONObject()))
+        tools.put(JSONObject().put("googleSearch", JSONObject()))
 
         val body = JSONObject()
-        body.put("system_instruction", systemInstruction)
+        body.put("systemInstruction", systemInstruction)
         body.put("contents", contents)
         body.put("generation_config", generationConfig)
         body.put("tools", tools)

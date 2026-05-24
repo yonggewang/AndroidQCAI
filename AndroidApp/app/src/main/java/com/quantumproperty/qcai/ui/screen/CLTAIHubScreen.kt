@@ -53,6 +53,10 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
     val dailyBrief by viewModel.currentDailyBrief.collectAsState(initial = null)
     val aiNewsArticles by viewModel.aiNewsArticles.collectAsState()
     
+    val messages by viewModel.messages.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val lastAIMessage = messages.lastOrNull { !it.isUser && !it.isHidden }
+    
     var isAINewsExpanded by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -149,6 +153,110 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                 contentPadding = PaddingValues(bottom = 100.dp), // Space for bottom input
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                // Expert Intel (AI response / loading card)
+                if (isLoading || lastAIMessage != null) {
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = when {
+                                            isSpanish -> "Información de Expertos"
+                                            isEnglish -> "Expert Intel"
+                                            else -> "专家分析"
+                                        },
+                                        color = Color.Black,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Icon(
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                
+                                if (!isLoading) {
+                                    IconButton(
+                                        onClick = { viewModel.clearMessages() },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = Color.Gray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color.Transparent,
+                                shape = RoundedCornerShape(24.dp),
+                                border = BorderStroke(1.dp, Color(0xFF007AFF).copy(alpha = 0.3f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color(0xFF007AFF).copy(alpha = 0.1f),
+                                                    Color(0xFFAF52DE).copy(alpha = 0.1f)
+                                                )
+                                            )
+                                        )
+                                        .padding(24.dp)
+                                ) {
+                                    if (isLoading) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            CircularProgressIndicator(
+                                                color = Color(0xFF007AFF),
+                                                modifier = Modifier.size(32.dp),
+                                                strokeWidth = 3.dp
+                                            )
+                                            Text(
+                                                text = when {
+                                                    isSpanish -> "QCAI está pensando..."
+                                                    isEnglish -> "QCAI is thinking..."
+                                                    else -> "QCAI 正在思考..."
+                                                },
+                                                color = Color.Black.copy(alpha = 0.8f),
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    } else {
+                                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                            val displayText = lastAIMessage!!.text.split("MATCH_SCORE_JSON")[0].trim()
+                                            Text(
+                                                text = displayText,
+                                                fontSize = 15.sp,
+                                                lineHeight = 24.sp,
+                                                color = Color.Black
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 2. AI News Pulse (Expandable)
                 if (aiNewsArticles.isNotEmpty()) {
                     item {

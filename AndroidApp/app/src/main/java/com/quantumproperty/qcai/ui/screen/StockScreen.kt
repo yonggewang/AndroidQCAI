@@ -20,13 +20,13 @@ import androidx.compose.ui.unit.sp
 import com.google.gson.annotations.SerializedName
 
 import kotlinx.coroutines.launch
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.Body
-import retrofit2.http.GET
-import retrofit2.http.Header
-import retrofit2.http.POST
-import retrofit2.http.Path
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import com.quantumproperty.qcai.data.AIService
+import com.quantumproperty.qcai.data.AIEngine
+import com.quantumproperty.qcai.data.AITopic
+import com.quantumproperty.qcai.data.AppLanguage
+import com.google.gson.Gson
 import com.quantumproperty.qcai.data.PreferenceManager
 
 
@@ -36,7 +36,7 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.ui.layout.ContentScale
 
-// --- RETROFIT API & MODELS ---
+// --- CLIENT-SIDE STOCK API & MODELS ---
 
 data class QuoteResponse(val c: Double, val d: Double, val dp: Double, val h: Double, val l: Double)
 data class AnalysisRequest(val symbol: String, val question: String)
@@ -66,46 +66,156 @@ data class TrendingStock(
 )
 
 interface StockService {
-    @GET("stock/quote/{symbol}")
-    suspend fun getQuote(@Path("symbol") symbol: String): QuoteResponse
-
-    @POST("stock/analyze")
-    suspend fun analyze(
-        @Header("x-gemini-api-key") apiKey: String,
-        @Body request: AnalysisRequest
-    ): AIResponse
-    
-    @GET("stock/explain/{symbol}")
-    suspend fun explainStock(
-        @Header("x-gemini-api-key") apiKey: String,
-        @Path("symbol") symbol: String
-    ): ExplainResponse
-    
-    @GET("stock/report/{symbol}")
-    suspend fun getReport(
-        @Path("symbol") symbol: String
-    ): StockReport
-    
-    @GET("stock/trending")
+    suspend fun getQuote(symbol: String): QuoteResponse
+    suspend fun analyze(apiKey: String, request: AnalysisRequest): AIResponse
+    suspend fun explainStock(apiKey: String, symbol: String): ExplainResponse
+    suspend fun getReport(symbol: String): StockReport
     suspend fun getTrending(): List<TrendingStock>
-    
-    @POST("stock/risk/analyze")
-    suspend fun analyzeRisk(
-        @Header("x-gemini-api-key") apiKey: String,
-        @Body request: RiskRequest
-    ): RiskResponse
+    suspend fun analyzeRisk(apiKey: String, request: RiskRequest): RiskResponse
 }
 
-object RetrofitClient {
-    private const val BASE_URL = "https://cyberpandaapp.com/"
-    
-    val api: StockService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(StockService::class.java)
+class LocalStockService : StockService {
+    private val client = OkHttpClient()
+    private val gson = Gson()
+
+    override suspend fun getQuote(symbol: String): QuoteResponse = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val token = PreferenceManager.finnhubKey.ifEmpty { "d5v9hb1r01qjj9jio9h0d5v9hb1r01qjj9jio9hg" }
+        val cleanSymbol = symbol.trim().uppercase()
+        val url = "https://finnhub.io/api/v1/quote?symbol=$cleanSymbol&token=$token"
+        val request = Request.Builder().url(url).get().build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("Finnhub Error: ${response.code}")
+            }
+            val json = response.body?.string() ?: "{}"
+            gson.fromJson(json, QuoteResponse::class.java)
+        }
     }
+
+    override suspend fun analyze(apiKey: String, request: AnalysisRequest): AIResponse = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val prompt = "Stock Symbol: ${request.symbol}. User Question: ${request.question}. Provide a detailed financial analysis."
+        val answer = AIService().sendMessage(
+            text = prompt,
+            engine = AIEngine.GEMINI,
+            topic = AITopic.STOCK,
+            language = AppLanguage.ENGLISH,
+            image = null,
+            realEstateAddress = null
+        )
+        AIResponse(answer)
+    }
+
+    override suspend fun explainStock(apiKey: String, symbol: String): ExplainResponse = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val prompt = "Provide a Deep Dive analysis of $symbol stock, summarizing recent news, price action, and potential risks/opportunities."
+        val answer = AIService().sendMessage(
+            text = prompt,
+            engine = AIEngine.GEMINI,
+            topic = AITopic.STOCK,
+            language = AppLanguage.ENGLISH,
+            image = null,
+            realEstateAddress = null
+        )
+        ExplainResponse(answer)
+    }
+
+    override suspend fun getReport(symbol: String): StockReport = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val prompt = """
+        Research valuation, safety, and trend indicators for stock symbol: $symbol.
+        Return a JSON matching this format:
+        {
+          "symbol": "$symbol",
+          "valuation_score": 4,
+          "valuation_msg": "Good Value",
+          "safety_score": 3,
+          "safety_msg": "Moderate Risk",
+          "trend_score": 5,
+          "trend_msg": "Strong Up-Trend"
+        }
+        Return ONLY the raw JSON, no formatting, no markdown backticks.
+        """.trimIndent()
+
+        val responseJson = AIService().sendMessage(
+            text = prompt,
+            engine = AIEngine.GEMINI,
+            topic = AITopic.STOCK,
+            language = AppLanguage.ENGLISH,
+            image = null,
+            realEstateAddress = null
+        )
+
+        val cleanJson = responseJson
+            .replace("```json", "")
+            .replace("```", "")
+            .trim()
+
+        gson.fromJson(cleanJson, StockReport::class.java)
+    }
+
+    override suspend fun getTrending(): List<TrendingStock> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val symbols = listOf("AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL")
+        val list = mutableListOf<TrendingStock>()
+        for (sym in symbols) {
+            try {
+                val quote = getQuote(sym)
+                list.add(TrendingStock(
+                    symbol = sym,
+                    changePct = quote.dp,
+                    price = quote.c
+                ))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        list
+    }
+
+    override suspend fun analyzeRisk(apiKey: String, request: RiskRequest): RiskResponse = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val holdingsList = request.holdings.joinToString(", ")
+        val prompt = """
+        Analyze the portfolio risk for these holdings: $holdingsList.
+        Provide:
+        1. Sector concentration stats.
+        2. Average beta and overall risk level estimate.
+        3. Potential correlation risks.
+        
+        Format your response as a JSON matching this structure:
+        {
+          "stats": [
+            "Beta: 1.25 (Aggressive)",
+            "Concentration: Technology 60%, Finance 20%",
+            "Worst historical drop estimate: -18%"
+          ],
+          "ai_analysis": "A detailed 2-paragraph risk assessment of these stocks..."
+        }
+        Return ONLY the raw JSON.
+        """.trimIndent()
+
+        val responseJson = AIService().sendMessage(
+            text = prompt,
+            engine = AIEngine.GEMINI,
+            topic = AITopic.STOCK,
+            language = AppLanguage.ENGLISH,
+            image = null,
+            realEstateAddress = null
+        )
+
+        val cleanJson = responseJson
+            .replace("```json", "")
+            .replace("```", "")
+            .trim()
+
+        val localResp = gson.fromJson(cleanJson, TempRiskResponse::class.java)
+        RiskResponse(localResp.stats, localResp.ai_analysis, null)
+    }
+}
+
+private data class TempRiskResponse(
+    val stats: List<String>,
+    val ai_analysis: String
+)
+
+object RetrofitClient {
+    val api: StockService = LocalStockService()
 }
 
 // --- COMPOSE UI ---
@@ -301,8 +411,9 @@ fun SingleStockView(geminiKey: String) {
                              try {
                                  quote = RetrofitClient.api.getQuote(symbol)
                                  report = RetrofitClient.api.getReport(symbol)
-                             } catch (e: Exception) {
-                                 aiResponse = "Error: ${e.message}"
+                             } catch (e: Throwable) {
+                                 if (e is kotlinx.coroutines.CancellationException) throw e
+                                 aiResponse = "Error: ${e.localizedMessage ?: e.message ?: e.toString()}"
                              }
                         }
                     },
@@ -375,8 +486,9 @@ fun SingleStockView(geminiKey: String) {
                                     try {
                                         val result = RetrofitClient.api.explainStock(geminiKey, symbol)
                                         aiResponse = result.explanation
-                                    } catch (e: Exception) {
-                                        aiResponse = "Error: ${e.message}"
+                                    } catch (e: Throwable) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
+                                        aiResponse = "Error: ${e.localizedMessage ?: e.message ?: e.toString()}"
                                     } finally {
                                         isLoading = false
                                     }
@@ -443,8 +555,9 @@ fun SingleStockView(geminiKey: String) {
                             try {
                                 val result = RetrofitClient.api.analyze(geminiKey, AnalysisRequest(symbol, userQuestion))
                                 aiResponse = result.answer
-                            } catch (e: Exception) {
-                                aiResponse = "Error: ${e.message}"
+                            } catch (e: Throwable) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                aiResponse = "Error: ${e.localizedMessage ?: e.message ?: e.toString()}"
                             } finally {
                                 isLoading = false
                             }
@@ -576,8 +689,9 @@ fun PortfolioRiskView(geminiKey: String) {
                 scope.launch {
                     try {
                         riskResponse = RetrofitClient.api.analyzeRisk(geminiKey, RiskRequest(holdings))
-                    } catch (e: Exception) {
-                        errorMessage = "Error: ${e.message}"
+                    } catch (e: Throwable) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        errorMessage = "Error: ${e.localizedMessage ?: e.message ?: e.toString()}"
                     } finally {
                         isLoading = false
                     }

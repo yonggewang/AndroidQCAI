@@ -248,9 +248,9 @@ fun MarketplaceItemCard(
                     }
                 }
                 
-                // Delete button - only for owner or super user (Level 99)
+                // Delete button - only for owner or super user (Level 99+)
                 if (userProfile != null && 
-                    (item.authorUsername == userProfile.username || userProfile.vipLevel == 99)) {
+                    (item.authorUsername == userProfile.username || userProfile.isAdmin)) {
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,

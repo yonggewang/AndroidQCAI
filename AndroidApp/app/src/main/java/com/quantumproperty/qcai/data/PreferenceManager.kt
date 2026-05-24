@@ -15,13 +15,57 @@ object PreferenceManager {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     }
 
+    var userOpenAIKey: String
+        get() = prefs.getString("user_openai_key", "") ?: ""
+        set(value) {
+            prefs.edit().putString("user_openai_key", value).apply()
+            if (value.isNotEmpty()) {
+                supabaseOpenAIKey = ""
+            }
+        }
+
+    var userGeminiKey: String
+        get() = prefs.getString("user_gemini_key", "") ?: ""
+        set(value) {
+            prefs.edit().putString("user_gemini_key", value).apply()
+            if (value.isNotEmpty()) {
+                supabaseGeminiKey = ""
+            }
+        }
+
+    var supabaseOpenAIKey: String
+        get() = prefs.getString("supabase_openai_key", "") ?: ""
+        set(value) = prefs.edit().putString("supabase_openai_key", value).apply()
+
+    var supabaseGeminiKey: String
+        get() = prefs.getString("supabase_gemini_key", "") ?: ""
+        set(value) = prefs.edit().putString("supabase_gemini_key", value).apply()
+
     var openAIKey: String
-        get() = prefs.getString(KEY_OPENAI, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_OPENAI, value).apply()
+        get() {
+            val userKey = userOpenAIKey
+            if (userKey.isNotEmpty()) return userKey
+            return supabaseOpenAIKey
+        }
+        set(value) {
+            userOpenAIKey = value
+        }
 
     var geminiKey: String
-        get() = prefs.getString(KEY_GEMINI, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_GEMINI, value).apply()
+        get() {
+            val userKey = userGeminiKey
+            if (userKey.isNotEmpty()) return userKey
+            return supabaseGeminiKey
+        }
+        set(value) {
+            userGeminiKey = value
+        }
+
+    private const val KEY_FINNHUB = "finnhub_key"
+
+    var finnhubKey: String
+        get() = prefs.getString(KEY_FINNHUB, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_FINNHUB, value).apply()
 
     var selectedEngine: String
         get() = prefs.getString(KEY_ENGINE, AIEngine.GEMINI.name) ?: AIEngine.GEMINI.name

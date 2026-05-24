@@ -1270,7 +1270,9 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                             engine = _selectedEngine.value,
                             topic = activeTopic,
                             language = _appLanguage.value,
-                            image = image
+                            image = image,
+                            realEstateAddress = if (activeTopic == AITopic.REAL_ESTATE) text else null,
+                            customPrompt = customPrompt
                         )
                     } else {
                         responseText = if (_appLanguage.value == AppLanguage.CHINESE) 
@@ -1467,76 +1469,41 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
     fun analyzeRealEstate(address: String) {
         if (address.isBlank()) return
-        
+        stopSequentialListen()
+        _selectedTopic.value = AITopic.REAL_ESTATE
         _isLoading.value = true
         _displayMode.value = DisplayMode.CHAT
         _showAIRealEstateTools.value = false // dismiss tools card
+        _messages.value = emptyList()
         
         viewModelScope.launch {
-            // Fetch official GIS data first
-            val gisData = com.quantumproperty.qcai.data.PropertyDataService().fetchPropertyData(address)
+            // Fetch official GIS data first (now returns structured result)
+            val gisResult = com.quantumproperty.qcai.data.PropertyDataService().fetchPropertyData(address)
             
-            val prompt = if (_appLanguage.value == AppLanguage.CHINESE) 
+            val basePrompt = if (gisResult.promptPayload != null) {
+                gisResult.promptPayload
+            } else {
                 """
-                请提供关于地址 "\(address)" 的尽可能详细、最新的信息和数据。以下是我已经为你获取的【官方政府 GIS 数据】（附在最后），请务必优先使用这些准确数据（特别是业主姓名、地块信息、学区等）来回答相关问题。 关于房主信息，如果不在GIS数据里，那么有可能的话，你可以自己做研究获得。
-
-                    请按以下顺序整理并输出具体内容（如果 GIS 数据包含列表之外的有用信息，请继续以 12、13 等序号列出）：
-                    1. 最新的房屋估值或市场价值
-                    2. 房屋总面积（平方英尺/平方米）
-                    3. 卧室数量和浴室数量
-                    4. 建筑年份
-                    5. 最近一次成交价格和成交日期
-                    6. 当前的房产税率或估算税额
-                    7. 所属学区及学校评分，周边环境描述，以及安全/治安指数
-                    8. 房产业主的公开信息（请直接引用 GIS 数据中的 Owner）
-                    9. 最近三年内该地址或周边（500米/1英里）范围内的犯罪记录和统计数据
-                    10. 周边居民的人口统计信息（年龄、收入水平、教育水平）
-                    11. 最近几年在这个房屋里居住过的人员名单和联系方式
-
-                    **重要指令：**
-                    - 请将 GIS 数据中的信息有机地整合到你的分析中，不要忽略它们。
-                    - 凡是 GIS 数据中提供但未包含在上述11点中的信息（如 Zoning, Land Use 等），请务必作为第 12、13 点等继续列出。
-                    - 直接提供数据结果，不要说空话。
+                You are a real estate data analyst. Compile a property report for "$address".
                 
+                Note: ${gisResult.formattedData}
                 
-                === OFFICIAL GIS DATA START ===
-                $gisData
-                === OFFICIAL GIS DATA END ===
+                Please search the web for details.
+                """.trimIndent()
+            }
+
+            val finalPrompt = if (_appLanguage.value == AppLanguage.CHINESE) {
                 """
-            else 
-                """
-                Please provide the most detailed and up-to-date information and data for the address "$address". I have attached the 【Official Government GIS Data】 at the end of this message. You MUST prioritize this accurate data (especially Owner Name, Parcel ID, School Zone, etc.) when answering. If the property owner is not included in the GIS data and if possible, you may do a research by yourself and get these information.
+                【LANGUAGE REQUIREMENT: You must translate the entire output of your response to Chinese. Do not output any English text except for address names or specific technical terms.】
 
-                Please provide the most detailed and up-to-date information and data for the address "\(address)". I have attached the 【Official Government GIS Data】 at the end of this message. You MUST prioritize this accurate data (especially Owner Name, Parcel ID, School Zone, etc.) when answering. If hte property owner is not included in the GIS data and if possible, you may do a researh by yourself and get these information.
-
-                    Please organize and output the specific content in the following order (if GIS data contains useful information beyond this list, please continue listing them as 12, 13, etc.):
-                    1. Latest property valuation or market value
-                    2. Total living area (sq ft / sq m)
-                    3. Number of bedrooms and bathrooms
-                    4. Year built
-                    5. Most recent sale price and date
-                    6. Current property tax rate or estimated tax amount
-                    7. Assigned school district and school ratings, neighborhood description, and safety/security index
-                    8. Publicly available property owner information (Directly cite the 'Owner' from the GIS data)
-                    9. Crime records and statistics within the last 3 years for this address or surrounding area (500m/1 mile)
-                    10. Demographics of surrounding residents (age, income level, education level)
-                    11. List of residents who have lived in this house in recent years
-
-                    **IMPORTANT INSTRUCTIONS:**
-                    - Integrate the GIS data organically into your analysis; do not ignore it.
-                    - Any information provided in the GIS data that is not covered in the above 11 points (like Zoning, Land Use) MUST be listed as items 12, 13, etc.
-                    - Directly provide data results; do not use vague conversational fillers.
-                
-                
-                === OFFICIAL GIS DATA START ===
-                $gisData
-                === OFFICIAL GIS DATA END ===
-                """
-            
+                $basePrompt
+                """.trimIndent()
+            } else {
+                basePrompt
+            }
             
             _isLoading.value = false
-            // Pass the detailed prompt as customPrompt, and the address as the question
-            sendMessage(text = address, customPrompt = prompt)
+            sendMessage(text = address, customPrompt = finalPrompt)
         }
     }
     
@@ -1586,12 +1553,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         ttsManager?.stop()
         _displayMode.value = DisplayMode.CHAT
         
-        val welcomeText = if (_appLanguage.value == AppLanguage.CHINESE) {
-            "我是 Queen City AI。我主要使用 ChatGPT 和 Gemini 作为 AI 后台，结合夏洛特本地的实际环境，为大家提供面向夏洛特华人的本地信息服务。我特别被设计为一个自己动手智能助手，重点帮助华人用户获取生活服务指南、办事流程说明，以及华人饮食与餐饮信息的分享与推荐，让在夏洛特的生活变得更加方便、高效、安心。"
-        } else {
-            "I am Queen City AI. I primarily use ChatGPT and Gemini as the AI engine, combined with the local environment of Charlotte, to provide local information services for the Charlotte community. I am specifically designed as a DIY smart assistant, focusing on helping users get life service guides, procedure explanations, and sharing and recommending Chinese food and catering information, making life in Charlotte more convenient, efficient, and secure."
+        if (_selectedTopic.value != AITopic.REAL_ESTATE) {
+            val welcomeText = if (_appLanguage.value == AppLanguage.CHINESE) {
+                "我是 Queen City AI。我主要使用 ChatGPT 和 Gemini 作为 AI 后台，结合夏洛特本地的实际环境，为大家提供面向夏洛特华人的本地信息服务。我特别被设计为一个自己动手智能助手，重点帮助华人用户获取生活服务指南、办事流程说明，以及华人饮食与餐饮信息的分享与推荐，让在夏洛特的生活变得更加方便、高效、安心。"
+            } else {
+                "I am Queen City AI. I primarily use ChatGPT and Gemini as the AI engine, combined with the local environment of Charlotte, to provide local information services for the Charlotte community. I am specifically designed as a DIY smart assistant, focusing on helping users get life service guides, procedure explanations, and sharing and recommending Chinese food and catering information, making life in Charlotte more convenient, efficient, and secure."
+            }
+            ttsManager?.speak(welcomeText)
         }
-        ttsManager?.speak(welcomeText)
     }
 
     fun dismissError() {
@@ -1611,14 +1580,14 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     private fun checkKeys(): Boolean {
         if (PreferenceManager.openAIKey.isEmpty() && PreferenceManager.geminiKey.isEmpty()) {
             _apiKeySetupReason.value = if (_appLanguage.value == AppLanguage.CHINESE) "请先设置 API Key" else "Please set API Key first"
-            _showAPIKeySetup.value = true
+            openProfile()
             return false
         }
         return true
     }
 
     fun openAPIKeySetup() {
-        _showAPIKeySetup.value = true
+        openProfile()
         _apiKeySetupReason.value = null
     }
 
@@ -1703,7 +1672,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                  "API Key 无效、缺失或已过期，请重新设置" 
              else 
                  "API Key is invalid, missing, or expired. Please reset it."
-             _showAPIKeySetup.value = true
+             openProfile()
         } else {
             _errorMessage.value = error // Show original error message
         }

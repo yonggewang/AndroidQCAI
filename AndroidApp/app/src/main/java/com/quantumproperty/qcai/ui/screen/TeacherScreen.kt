@@ -69,7 +69,10 @@ val LightGrey = Color(0xFFF5F5F7)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
+fun TeacherScreen(
+    viewModel: TeacherViewModel = viewModel(),
+    onBack: (() -> Unit)? = null
+) {
     val messages by viewModel.messages.collectAsState()
     val selectedTopic by viewModel.selectedTopic.collectAsState()
     val displayMode by viewModel.displayMode.collectAsState()
@@ -77,8 +80,6 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
     val isRecording by viewModel.isRecording.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    // val showAddressInput by viewModel.showAddressInput.collectAsState()
-    val showAPIKeySetup by viewModel.showAPIKeySetup.collectAsState()
     val context = LocalContext.current
     
     var showUserSheet by remember { mutableStateOf(false) }
@@ -124,12 +125,6 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
         }
     }
 
-
-    if (showAPIKeySetup) {
-        APIKeySetupDialog(
-            onDismiss = { viewModel.dismissAPIKeySetup() }
-        )
-    }
 
     val showAIRealEstateTools by viewModel.showAIRealEstateTools.collectAsState()
     if (showAIRealEstateTools) {
@@ -289,6 +284,17 @@ fun TeacherScreen(viewModel: TeacherViewModel = viewModel()) {
                     .heightIn(min = 60.dp), // Ensure minimal touch target height
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.Black
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+
                 val isLoggedIn by viewModel.isLoggedIn.collectAsState()
                 val userName by viewModel.userName.collectAsState()
 

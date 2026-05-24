@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
         
         // Initialize Preference Manager BEFORE scheduling background sync or loading UI
         com.quantumproperty.qcai.data.PreferenceManager.init(this)
+        com.quantumproperty.qcai.data.LocalCalculators.shared.init(this)
         
         // Schedule Context OS Background Sync
         com.quantumproperty.qcai.service.BackgroundSyncWorker.schedule(this)
