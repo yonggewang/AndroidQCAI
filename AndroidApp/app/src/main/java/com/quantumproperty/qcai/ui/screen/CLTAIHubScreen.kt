@@ -300,7 +300,7 @@ fun CLTAIHubScreen(viewModel: TeacherViewModel) {
                                         Text(topArticle.summary, fontSize = 14.sp, color = Color.Gray, maxLines = 3, overflow = TextOverflow.Ellipsis)
                                         
                                         OutlinedButton(
-                                            onClick = { BrowserUtils.openURL(context, "https://qcai-net.github.io/ainews/ainews.html") },
+                                            onClick = { BrowserUtils.openURL(context, "https://qcai-net.github.io/ainews/") },
                                             shape = RoundedCornerShape(20.dp),
                                             border = BorderStroke(1.dp, Color(0xFF007AFF)),
                                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
