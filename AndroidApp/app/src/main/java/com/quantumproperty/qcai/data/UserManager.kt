@@ -106,6 +106,12 @@ class UserManager {
                     } else {
                         PreferenceManager.supabaseOpenAIKey = ""
                     }
+                } else if (secret.key == "PINECONE_API_KEY") {
+                    PreferenceManager.pineconeKey = secret.value
+                } else if (secret.key == "FMP_API_KEY") {
+                    PreferenceManager.fmpKey = secret.value
+                } else if (secret.key == "POLYGON_API_KEY") {
+                    PreferenceManager.polygonKey = secret.value
                 }
             }
         } catch (e: Exception) {

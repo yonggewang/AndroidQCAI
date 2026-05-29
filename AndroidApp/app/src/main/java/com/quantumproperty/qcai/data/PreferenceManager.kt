@@ -62,10 +62,25 @@ object PreferenceManager {
         }
 
     private const val KEY_FINNHUB = "finnhub_key"
+    private const val KEY_PINECONE = "pinecone_key"
+    private const val KEY_FMP = "fmp_key"
+    private const val KEY_POLYGON = "polygon_key"
 
     var finnhubKey: String
         get() = prefs.getString(KEY_FINNHUB, "") ?: ""
         set(value) = prefs.edit().putString(KEY_FINNHUB, value).apply()
+
+    var pineconeKey: String
+        get() = prefs.getString(KEY_PINECONE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_PINECONE, value).apply()
+
+    var fmpKey: String
+        get() = prefs.getString(KEY_FMP, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_FMP, value).apply()
+
+    var polygonKey: String
+        get() = prefs.getString(KEY_POLYGON, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_POLYGON, value).apply()
 
     var selectedEngine: String
         get() = prefs.getString(KEY_ENGINE, AIEngine.GEMINI.name) ?: AIEngine.GEMINI.name

@@ -57,6 +57,18 @@ fun TextInputArea(
                 placeholder = { Text(placeholder) },
                 singleLine = true,
                 shape = RoundedCornerShape(24.dp),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSend = {
+                        if (text.isNotBlank()) {
+                            println("SharedInput: Keyboard Send Action clicked. Calling onSend callback with '$text'")
+                            onSend(text)
+                            text = ""
+                        }
+                    }
+                ),
                 colors = TextFieldDefaults.colors(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
@@ -68,7 +80,9 @@ fun TextInputArea(
             
             IconButton(
                 onClick = {
+                    println("SharedInput: IconButton clicked. text.isNotBlank=${text.isNotBlank()}, text='$text'")
                     if (text.isNotBlank()) {
+                        println("SharedInput: Calling onSend callback with '$text'")
                         onSend(text)
                         text = ""
                     } else {

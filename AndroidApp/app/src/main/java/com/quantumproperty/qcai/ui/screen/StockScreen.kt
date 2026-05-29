@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.ui.layout.ContentScale
+import org.json.JSONObject
+import org.json.JSONArray
 
 // --- CLIENT-SIDE STOCK API & MODELS ---
 
@@ -79,8 +81,48 @@ class LocalStockService : StockService {
     private val gson = Gson()
 
     override suspend fun getQuote(symbol: String): QuoteResponse = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val token = PreferenceManager.finnhubKey.ifEmpty { "d5v9hb1r01qjj9jio9h0d5v9hb1r01qjj9jio9hg" }
         val cleanSymbol = symbol.trim().uppercase()
+        val polygonKey = PreferenceManager.polygonKey
+        
+        // 1. Try Polygon first
+        if (polygonKey.isNotEmpty()) {
+            try {
+                val url = "https://api.polygon.io/v2/last/trade/$cleanSymbol?apiKey=$polygonKey"
+                val request = Request.Builder().url(url).get().build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val json = JSONObject(response.body?.string() ?: "{}")
+                        val results = json.optJSONObject("results")
+                        if (results != null) {
+                            val lastPrice = results.optDouble("p", 0.0)
+                            
+                            // Get previous close
+                            var prevClose = 0.0
+                            val prevUrl = "https://api.polygon.io/v2/aggs/ticker/$cleanSymbol/prevClose?adjusted=true&apiKey=$polygonKey"
+                            val prevRequest = Request.Builder().url(prevUrl).get().build()
+                            client.newCall(prevRequest).execute().use { prevResponse ->
+                                if (prevResponse.isSuccessful) {
+                                    val prevJson = JSONObject(prevResponse.body?.string() ?: "{}")
+                                    val prevResults = prevJson.optJSONArray("results")
+                                    if (prevResults != null && prevResults.length() > 0) {
+                                        prevClose = prevResults.getJSONObject(0).optDouble("c", 0.0)
+                                    }
+                                }
+                            }
+                            
+                            val change = lastPrice - prevClose
+                            val changePct = if (prevClose > 0.0) (change / prevClose) * 100.0 else 0.0
+                            return@withContext QuoteResponse(c = lastPrice, d = change, dp = changePct, h = lastPrice, l = lastPrice)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // 2. Fallback to Finnhub
+        val token = PreferenceManager.finnhubKey.ifEmpty { "d5v9hb1r01qjj9jio9h0d5v9hb1r01qjj9jio9hg" }
         val url = "https://finnhub.io/api/v1/quote?symbol=$cleanSymbol&token=$token"
         val request = Request.Builder().url(url).get().build()
         client.newCall(request).execute().use { response ->
@@ -119,6 +161,57 @@ class LocalStockService : StockService {
     }
 
     override suspend fun getReport(symbol: String): StockReport = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val cleanSymbol = symbol.trim().uppercase()
+        val fmpKey = PreferenceManager.fmpKey
+        
+        // 1. Try FMP Profile first
+        if (fmpKey.isNotEmpty()) {
+            try {
+                val url = "https://financialmodelingprep.com/api/v3/profile/$cleanSymbol?apikey=$fmpKey"
+                val request = Request.Builder().url(url).get().build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val jsonStr = response.body?.string() ?: "[]"
+                        val jsonArray = JSONArray(jsonStr)
+                        if (jsonArray.length() > 0) {
+                            val profile = jsonArray.getJSONObject(0)
+                            val mktCap = profile.optDouble("mktCap", 0.0)
+                            val beta = profile.optDouble("beta", 1.0)
+                            
+                            var safetyScore = 3
+                            if (mktCap > 200_000_000_000) safetyScore += 2
+                            else if (mktCap > 10_000_000_000) safetyScore += 1
+                            else if (mktCap < 2_000_000_000) safetyScore -= 1
+                            
+                            if (beta < 0.8) safetyScore += 1
+                            else if (beta > 1.5) safetyScore -= 1
+                            safetyScore = maxOf(1, minOf(5, safetyScore))
+                            
+                            val safetyMsg = when {
+                                safetyScore >= 5 -> "Very Safe"
+                                safetyScore == 4 -> "Safe"
+                                safetyScore == 3 -> "Moderate Risk"
+                                else -> "Risky"
+                            }
+                            
+                            return@withContext StockReport(
+                                symbol = cleanSymbol,
+                                valuationScore = 3,
+                                valuationMsg = "Fair Value",
+                                safetyScore = safetyScore,
+                                safetyMsg = safetyMsg,
+                                trendScore = 3,
+                                trendMsg = "Flat Trend"
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // 2. Fallback to Gemini
         val prompt = """
         Research valuation, safety, and trend indicators for stock symbol: $symbol.
         Return a JSON matching this format:
@@ -459,7 +552,7 @@ fun SingleStockView(geminiKey: String) {
                             )
                         }
                         
-                        Divider(modifier = Modifier.padding(vertical = 12.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                         
                         report?.let { r ->
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -476,7 +569,7 @@ fun SingleStockView(geminiKey: String) {
                                 ScoreRow("Safety", r.safetyScore, r.safetyMsg)
                                 ScoreRow("Trend", r.trendScore, r.trendMsg)
                             }
-                            Divider(modifier = Modifier.padding(vertical = 12.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                         }
                         
                         TextButton(
@@ -742,7 +835,7 @@ fun PortfolioRiskView(geminiKey: String) {
                          }
 
                          if (imageBitmap != null) {
-                             Divider()
+                             HorizontalDivider()
                              Text("Correlation Matrix", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                              Image(
                                  bitmap = imageBitmap,
@@ -755,7 +848,7 @@ fun PortfolioRiskView(geminiKey: String) {
                          }
                      }
                      
-                     Divider()
+                     HorizontalDivider()
                      
                      Text("AI Risk Assessment", style = MaterialTheme.typography.titleMedium, color = LocalAccentOrange, fontWeight = FontWeight.Bold)
                      

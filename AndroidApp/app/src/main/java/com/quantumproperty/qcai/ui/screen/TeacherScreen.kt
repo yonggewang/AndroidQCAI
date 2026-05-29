@@ -616,51 +616,53 @@ fun TeacherScreen(
         ) {
             Divider()
             
-            // Configuration View
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Deleted Engine Switch from here
-                
-                // Refresh button removed
+            if (selectedTopic != AITopic.REAL_ESTATE && selectedTopic != AITopic.STOCK) {
+                // Configuration View
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Deleted Engine Switch from here
+                    
+                    // Refresh button removed
 
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // Topic Grid
-                val topMenuItems by viewModel.topMenuItems.collectAsState()
-                val currentTopics = if (topMenuItems.isNotEmpty()) {
-                    topMenuItems.map { it.topic }
-                } else {
-                    listOf(
-                        AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS, AITopic.FOOD,
-                        AITopic.DIY, AITopic.REAL_ESTATE, AITopic.LIFE, AITopic.MISC, AITopic.CLT_VIBE
-                    )
-                }
-                
-                // Group into rows of 4
-                val topicRows = currentTopics.chunked(4)
-                
-                topicRows.forEachIndexed { rowIndex, rowTopics ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowTopics.forEachIndexed { colIndex, topic ->
-                            val itemIndex = rowIndex * 4 + colIndex
-                            val dynamicItem = if (topMenuItems.size > itemIndex) topMenuItems[itemIndex] else null
-                            
-                            TopicButton(
-                                topic = topic,
-                                dynamicItem = dynamicItem,
-                                isSelected = selectedTopic == topic,
-                                appLanguage = appLanguage,
-                                onClick = { viewModel.setTopic(topic) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Topic Grid
+                    val topMenuItems by viewModel.topMenuItems.collectAsState()
+                    val currentTopics = if (topMenuItems.isNotEmpty()) {
+                        topMenuItems.map { it.topic }
+                    } else {
+                        listOf(
+                            AITopic.WORLD_NEWS, AITopic.FINANCE_NEWS, AITopic.AI_ANALYSIS, AITopic.FOOD,
+                            AITopic.DIY, AITopic.REAL_ESTATE, AITopic.LIFE, AITopic.MISC, AITopic.CLT_VIBE
+                        )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Group into rows of 4
+                    val topicRows = currentTopics.chunked(4)
+                    
+                    topicRows.forEachIndexed { rowIndex, rowTopics ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowTopics.forEachIndexed { colIndex, topic ->
+                                val itemIndex = rowIndex * 4 + colIndex
+                                val dynamicItem = if (topMenuItems.size > itemIndex) topMenuItems[itemIndex] else null
+                                
+                                TopicButton(
+                                    topic = topic,
+                                    dynamicItem = dynamicItem,
+                                    isSelected = selectedTopic == topic,
+                                    appLanguage = appLanguage,
+                                    onClick = { viewModel.setTopic(topic) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-                
-                Spacer(modifier = Modifier.height(12.dp))
             }
             
             

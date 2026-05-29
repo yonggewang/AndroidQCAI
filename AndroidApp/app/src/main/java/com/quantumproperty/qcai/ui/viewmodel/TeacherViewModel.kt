@@ -1176,7 +1176,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         // Match by topic directly
         val dynamicItem = _topMenuItems.value.find { it.topic == topic }
 
-        if (dynamicItem != null && topic != AITopic.CLT_VIBE) {
+        if (dynamicItem != null && topic != AITopic.CLT_VIBE && topic != AITopic.REAL_ESTATE) {
             _displayMode.value = DisplayMode.WEB
             _currentWebUrl.value = if (isChinese) dynamicItem.chineseUrl else dynamicItem.englishUrl
         } else {
@@ -1207,8 +1207,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     _currentWebUrl.value = "https://quantumpropertyllc.github.io/news/misc_cn.html"
                 }
                 AITopic.REAL_ESTATE -> {
-                    _displayMode.value = DisplayMode.WEB
-                    _currentWebUrl.value = "https://qcai-net.github.io/airealestate/"
+                    _displayMode.value = DisplayMode.CHAT
                 }
                 AITopic.LIFE -> {
                     _displayMode.value = DisplayMode.WEB
@@ -1276,9 +1275,11 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun sendMessage(text: String, image: Bitmap? = null, customPrompt: String? = null, explicitTopic: AITopic? = null) {
+        println("TeacherViewModel: sendMessage called. text='$text', explicitTopic=$explicitTopic, _selectedTopic=${_selectedTopic.value}")
         // No local key check needed - all queries route through backend which has server-side keys
         
         val activeTopic = explicitTopic ?: _selectedTopic.value
+        println("TeacherViewModel: activeTopic determined as $activeTopic")
 
         if (customPrompt == null) {
             lastRealEstateRegistryData = null
@@ -1290,14 +1291,17 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
         val newUserMsg = ChatMessage(text = text, isUser = true)
         _messages.value = _messages.value + newUserMsg
         _isLoading.value = true
+        println("TeacherViewModel: Appended user message. messages size = ${_messages.value.size}, isLoading set to true")
 
         viewModelScope.launch {
+            println("TeacherViewModel: Coroutine launched inside sendMessage")
             try {
                 var responseText: String
                 var extraData: Map<String, Any>? = null
 
                 // Route ALL queries through backend (backend has server-side Gemini keys)
                 try {
+                    println("TeacherViewModel: Querying CityOSService.queryChat...")
                     val chatResponse = com.quantumproperty.qcai.data.CityOSService.instance.queryChat(
                         question = text,
                         engine = _selectedEngine.value.name,
@@ -1308,10 +1312,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     )
                     responseText = chatResponse.answer
                     extraData = chatResponse.extraData
+                    println("TeacherViewModel: CityOSService.queryChat success. responseText length = ${responseText.length}")
                 } catch (e: Exception) {
+                    println("TeacherViewModel: CityOSService.queryChat failed with exception: ${e.message}")
                     e.printStackTrace()
-                    // Fallback to local AIService ONLY if local keys are available
-                    if (PreferenceManager.geminiKey.isNotEmpty() || PreferenceManager.openAIKey.isNotEmpty()) {
+                    val errorMsg = e.message ?: ""
+                    if (errorMsg.contains("log in", ignoreCase = true) || errorMsg.contains("登录", ignoreCase = true) || errorMsg.contains("API Key", ignoreCase = true) || errorMsg.contains("密钥", ignoreCase = true)) {
+                        responseText = "⚠️ $errorMsg"
+                    } else if (PreferenceManager.geminiKey.isNotEmpty() || PreferenceManager.openAIKey.isNotEmpty()) {
+                        println("TeacherViewModel: Falling back to local AIService since local keys are present")
                         responseText = aiService.sendMessage(
                             text = text,
                             engine = _selectedEngine.value,
@@ -1322,10 +1331,15 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                             customPrompt = customPrompt
                         )
                     } else {
-                        responseText = if (_appLanguage.value == AppLanguage.CHINESE) 
-                            "⚠️ 服务器暂时无法响应，请稍后重试。" 
-                        else 
-                            "⚠️ Server is temporarily unavailable. Please try again later."
+                        println("TeacherViewModel: Local keys empty. Using exception message or general fallback")
+                        responseText = if (errorMsg.isNotEmpty()) {
+                            "⚠️ $errorMsg"
+                        } else {
+                            if (_appLanguage.value == AppLanguage.CHINESE) 
+                                "⚠️ 服务器暂时无法响应，请稍后重试。" 
+                            else 
+                                "⚠️ Server is temporarily unavailable. Please try again later."
+                        }
                     }
                 }
 
@@ -1343,8 +1357,10 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
 
                 val aiMsg = ChatMessage(text = displayText, isUser = false, extraData = extraData)
                 _messages.value = _messages.value + aiMsg
+                println("TeacherViewModel: Added AI message. messages size = ${_messages.value.size}")
                 
                 if (activeTopic == AITopic.CLT_VIBE) {
+                    println("TeacherViewModel: Parsing recommendations for CLT_VIBE")
                     parseRecommendations(responseText)
                 }
                 
@@ -1352,10 +1368,13 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
                     ttsManager?.speak(responseText)
                 }
             } catch (e: Exception) {
+                println("TeacherViewModel: Outer catch exception: ${e.message}")
+                e.printStackTrace()
                 lastRealEstateRegistryData = null
                 handleError(e.message)
             } finally {
                 _isLoading.value = false
+                println("TeacherViewModel: Finally block. isLoading set to false")
             }
         }
     }

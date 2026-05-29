@@ -28,7 +28,11 @@ class AIService {
     private val geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     private val geminiEmbedEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
     private val pineconeEndpoint = "https://clt-vibe-rag-e13kol2.svc.aped-4627-b74a.pinecone.io/query"
-    private val pineconeKey = "pcsk_7HuA7A_7T3VQ5Fuq6dTk6hwJPZedEJKU5Rk4pDk4PngnJstzMYSGzbpWJrwGaswWNUVNZj"
+    private val pineconeKey: String
+        get() {
+            val key = PreferenceManager.pineconeKey
+            return if (key.isNotEmpty()) key else "pcsk_7HuA7A_7T3VQ5Fuq6dTk6hwJPZedEJKU5Rk4pDk4PngnJstzMYSGzbpWJrwGaswWNUVNZj"
+        }
     private val vercelEndpoint = "https://vercel-backendcltai.vercel.app/api/analyze?teamId=team_DxHeE18WWzpaGC1GLeY3l6oQ"
 
     suspend fun sendMessage(
